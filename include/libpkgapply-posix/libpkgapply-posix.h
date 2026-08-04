@@ -6,7 +6,6 @@
 #include <libpkgapply-posix/export.h>
 #include <libpkgapply-posix/version.h>
 
-#include <libpkgapply-posix/export.h>
 
 #include <libpkgapply-posix/backend.h>
 #include <libpkgapply-posix/capture_store.h>

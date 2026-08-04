@@ -333,3 +333,44 @@ The installed implementation is
 already-selected target and store directory descriptors. Its public surface is
 only the abstract backend contract; mechanism order and mutable transaction
 state remain private to `libpkgapply-posix`.
+
+
+## Caller-owned mutation lease
+
+The POSIX provider consumes one already-selected lock-directory descriptor and
+derives one coordination filename from the exact mutation-exclusion-domain
+identity. The file is opened without following a final symlink and retained
+under a nonblocking exclusive advisory lock. Acquisition creates no wait,
+retry, or backoff policy. The immutable acquisition identity binds the exact
+application target context, exclusion domain, and a mechanism-issued nonce.
+
+The coordination file is never removed. Unlink or replacement invalidates the
+live lease observation even though the old descriptor remains locked; this
+prevents a caller from claiming exclusion after the named cooperative authority
+has split. The lock directory is caller-selected configuration authority, not
+a target discovered from pathnames or package state.
+
+The lease establishes exclusion only among cooperating actors. Filesystem
+operations still use stable root handles, no-follow component traversal, and
+final observation because unrelated processes may ignore the protocol.
+
+
+## FD-anchored target observation
+
+`libpkgapply-posix` observes managed target objects relative to a retained root
+directory descriptor. Parent components are opened one at a time with
+`openat(2)`, `O_DIRECTORY`, and `O_NOFOLLOW`; a symbolic-link parent is an
+observation error rather than an alternate route through the host namespace.
+The leaf is inspected with no-follow metadata operations, so a leaf symbolic
+link is reported as a symbolic link and is never traversed.
+
+Regular content identities are SHA-256 digests of bytes read from an opened
+regular-file descriptor. Metadata is sampled before and after the read. A
+replacement or concurrent modification yields an unknown observation instead
+of evidence assembled from different objects. Hard-link relations are claimed
+only when the caller supplies an expected logical anchor and both paths are
+observed as the same regular inode. The observer does not infer package
+semantics from arbitrary inode aliases.
+
+This layer is observation mechanism only. It does not acquire mutation leases,
+execute active effects, capture recovery objects, or publish durable records.

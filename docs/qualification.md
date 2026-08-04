@@ -2,6 +2,26 @@
 
 The following qualification contract was extracted from the libpkgapply 2.3.0 test doctrine.
 
+POSIX outer-lease tests
+-----------------------
+
+The caller-owned mutation-lease mechanism must prove:
+
+* acquisition is anchored to an already-selected directory descriptor;
+* one exclusion-domain identity maps to one deterministic coordination name;
+* a competing holder is refused without waiting;
+* the lock file is regular and is not removed on release;
+* a final lock-file symlink is refused;
+* unlink or replacement makes `held()` false;
+* target context, exclusion domain, nonce, and acquisition identity remain exact;
+* target-scope validation accepts another acquisition in the same target and
+  exclusion domain without requiring or fabricating a state projection;
+* target-scope validation rejects released, foreign-target, and foreign-domain
+  leases;
+* full validation accepts only a projection made under that exact acquisition;
+  and
+* acquisition and validation perform no installed-state read or target mutation.
+
 POSIX backend tests
 -------------------
 

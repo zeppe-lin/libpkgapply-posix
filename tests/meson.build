@@ -185,6 +185,15 @@ if get_option('tests').allowed()
   test('posix-target-observer-test', posix_target_observer_test)
 
   test(
+    'verify pkg-config metadata',
+    sh,
+    args: [
+      join_paths(meson.current_source_dir(), 'pkgconfig_metadata_test.sh'),
+      meson.project_build_root(),
+    ],
+  )
+
+  test(
     'verify POSIX mutation lease source contract',
     sh,
     args: [

@@ -73,6 +73,12 @@ pkgconf.generate(
   filebase: 'libpkgapply-posix',
   description: 'POSIX mechanisms for libpkgapply',
   subdirs: '.',
-  requires: [libpkgapply_dep, libpkgimage_dep],
-  requires_private: [libpkgplan_dep, libcrypto_dep],
+  requires: [
+    'libpkgapply >= 3.0.0',
+    'libpkgimage >= 0.4.0',
+  ],
+  requires_private: [
+    'libpkgplan >= 0.3.0',
+    libcrypto_dep,
+  ],
 )

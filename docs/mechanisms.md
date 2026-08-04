@@ -334,7 +334,6 @@ already-selected target and store directory descriptors. Its public surface is
 only the abstract backend contract; mechanism order and mutable transaction
 state remain private to `libpkgapply-posix`.
 
-
 ## Caller-owned mutation lease
 
 The POSIX provider consumes one already-selected lock-directory descriptor and

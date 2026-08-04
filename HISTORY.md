@@ -13,3 +13,5 @@
   contracts, installed-consumer qualification, and independent CI.
 - Anchored every public POSIX exception domain with an out-of-line owner
   destructor.
+- Published complete mutation-lease, target-observation, and composed-backend
+  contracts, including descriptor authority, error domains, and restart binding.

@@ -15,3 +15,6 @@
   destructor.
 - Published complete mutation-lease, target-observation, and composed-backend
   contracts, including descriptor authority, error domains, and restart binding.
+- Published complete incoming-payload, old-object capture, and rejected-object
+  store contracts, including private namespace, byte verification, and durability
+  refusal semantics.

@@ -38,10 +38,15 @@ libpkgapply_posix = library(
   soversion: '2',
 )
 
+libpkgapply_posix_consumer_deps = [libpkgapply_dep, libpkgimage_dep]
+if want_static
+  libpkgapply_posix_consumer_deps += [libpkgplan_dep, libcrypto_dep]
+endif
+
 libpkgapply_posix_dep = declare_dependency(
   link_with: libpkgapply_posix,
   include_directories: public_inc,
-  dependencies: [libpkgapply_dep, libpkgimage_dep, libpkgplan_dep],
+  dependencies: libpkgapply_posix_consumer_deps,
   version: meson.project_version(),
 )
 meson.override_dependency('libpkgapply-posix', libpkgapply_posix_dep)
@@ -68,6 +73,6 @@ pkgconf.generate(
   filebase: 'libpkgapply-posix',
   description: 'POSIX mechanisms for libpkgapply',
   subdirs: '.',
-  requires: [libpkgapply_dep, libpkgimage_dep, libpkgplan_dep],
-  requires_private: [libcrypto_dep],
+  requires: [libpkgapply_dep, libpkgimage_dep],
+  requires_private: [libpkgplan_dep, libcrypto_dep],
 )

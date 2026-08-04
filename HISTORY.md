@@ -6,7 +6,8 @@
   `libpkgapply` 2.3.0.
 - Preserved the published POSIX ABI generation while establishing independent
   repository and release ownership.
-- Made direct public dependencies on `libpkgapply`, `libpkgimage`, and
-  `libpkgplan` explicit; retained OpenSSL as a private provider.
+- Made direct public dependencies on `libpkgapply` and `libpkgimage`
+  explicit; retained direct planner use and OpenSSL as private implementation
+  requirements.
 - Added hidden-by-default visibility, explicit API exports, repository
   contracts, installed-consumer qualification, and independent CI.

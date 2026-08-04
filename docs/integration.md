@@ -5,9 +5,10 @@ A caller selects the target root and private storage directories, acquires a
 `application_posix_backend` from already-open directory descriptors, and hands
 both to `libpkgapply`.
 
-The public metadata exposes `libpkgapply >= 3.0.0`, `libpkgimage >= 0.4.0`, and
-`libpkgplan >= 0.3.0` because installed headers use those value types directly.
-`libcrypto` remains private.
+The public metadata exposes `libpkgapply >= 3.0.0` and
+`libpkgimage >= 0.4.0` because installed headers use those value types directly.
+Direct `libpkgplan >= 0.3.0` use and `libcrypto` remain private implementation
+requirements and enter consumer flags only for static linkage.
 
 Repository separation is intentional. A non-POSIX backend may implement the
 same `libpkgapply` contracts without inheriting POSIX storage layout, system

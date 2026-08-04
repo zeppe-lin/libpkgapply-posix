@@ -16,6 +16,8 @@ that inventory from both GCC and Clang shared builds and either narrow the map
 or record the accepted set in this document. No symbol list has been invented
 without a linkable dependency closure.
 
-Public headers expose `libpkgapply`, `libpkgimage`, and `libpkgplan` value types;
-those dependencies belong in pkg-config `Requires`. `libcrypto` belongs in
-`Requires.private`.
+Public headers expose `libpkgapply` and `libpkgimage` value types directly;
+those dependencies belong in pkg-config `Requires`. Direct `libpkgplan` use is
+an implementation edge, while `libcrypto` is a private mechanism provider.
+Both belong in `Requires.private` and enter consumer flags only for static
+linkage.

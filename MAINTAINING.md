@@ -4,7 +4,7 @@
 
 Release against compatible published `libpkgapply`, `libpkgimage`, and
 `libpkgplan` tags. Public pkg-config requirements must match installed-header
-exposure exactly; `libcrypto` remains private.
+exposure exactly; direct planner use and `libcrypto` remain private.
 
 ## Mechanism discipline
 

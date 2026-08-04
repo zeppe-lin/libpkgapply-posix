@@ -9,6 +9,8 @@ install_data(
   'architecture.md',
   'integration.md',
   'testing.md',
+  'mechanisms.md',
+  'qualification.md',
   'abi.md',
   'code-style.md',
   'history/libpkgapply-2.3-extraction.md',

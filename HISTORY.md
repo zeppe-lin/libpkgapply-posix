@@ -21,3 +21,4 @@
 - Published complete durable-journal, restart-checkpoint, completed-evidence,
   umbrella, and version contracts, including atomic visibility and exact
   republication semantics.
+- Updated package-plan fixtures to the syntax-neutral `libpkgsource` 3.0 sealing contract.

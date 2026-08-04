@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <libpkgapply-posix/export.h>
+
 #include <cstdint>
 #include <memory>
 #include <stdexcept>
@@ -25,7 +27,7 @@ enum class target_mutation_lease_error_code : std::uint8_t {
 };
 
 /*! \brief POSIX exclusion-mechanism failure before target mutation. */
-class target_mutation_lease_error final : public std::runtime_error {
+class PKGAPPLY_POSIX_API target_mutation_lease_error final : public std::runtime_error {
 public:
   target_mutation_lease_error(target_mutation_lease_error_code code,
                               int system_error,
@@ -47,7 +49,7 @@ private:
  * never removed.  The caller retains the returned object through application,
  * installed-state publication, and finalization or recovery.
  */
-class target_mutation_lease final : public pkgapply::target_mutation_lease {
+class PKGAPPLY_POSIX_API target_mutation_lease final : public pkgapply::target_mutation_lease {
 public:
   /*! \brief Attempt one acquisition in an explicit lock directory.
    *

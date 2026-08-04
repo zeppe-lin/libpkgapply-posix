@@ -1,0 +1,9 @@
+LIBPKGAPPLY_POSIX_2 {
+  global:
+    _ZN8pkgapply5posix*;
+    _ZTIN8pkgapply5posix*;
+    _ZTSN8pkgapply5posix*;
+    _ZTVN8pkgapply5posix*;
+  local:
+    *;
+};

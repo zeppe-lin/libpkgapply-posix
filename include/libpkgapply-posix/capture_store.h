@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <libpkgapply-posix/export.h>
+
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -46,7 +48,7 @@ enum class capture_store_error_code : std::uint8_t {
 };
 
 /*! \brief POSIX capture failure before active-target mutation authority. */
-class capture_store_error final : public std::runtime_error {
+class PKGAPPLY_POSIX_API capture_store_error final : public std::runtime_error {
 public:
   capture_store_error(capture_store_error_code code,
                       int system_error,
@@ -64,7 +66,7 @@ private:
 };
 
 /*! \brief Stable read-only descriptor for one captured regular object. */
-class captured_regular_object final {
+class PKGAPPLY_POSIX_API captured_regular_object final {
 public:
   captured_regular_object(const captured_regular_object&) = delete;
   captured_regular_object& operator=(const captured_regular_object&) = delete;
@@ -84,7 +86,7 @@ private:
 };
 
 /*! \brief One immutable old-object capture reopened from private storage. */
-class captured_old_object final {
+class PKGAPPLY_POSIX_API captured_old_object final {
 public:
   captured_old_object(const captured_old_object&) = delete;
   captured_old_object& operator=(const captured_old_object&) = delete;
@@ -108,7 +110,7 @@ private:
 };
 
 /*! \brief FD-anchored private store for admitted pre-mutation objects. */
-class application_capture_store final {
+class PKGAPPLY_POSIX_API application_capture_store final {
 public:
   /*! \brief Open private storage and target root without following final symlinks. */
   [[nodiscard]] static application_capture_store open(

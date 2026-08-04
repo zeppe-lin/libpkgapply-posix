@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <libpkgapply-posix/export.h>
+
 #include <cstdint>
 #include <optional>
 #include <stdexcept>
@@ -27,7 +29,7 @@ enum class completed_evidence_store_error_code : std::uint8_t {
 };
 
 /*! \brief I/O, corruption, or immutability failure in evidence storage. */
-class completed_evidence_store_error final : public std::runtime_error {
+class PKGAPPLY_POSIX_API completed_evidence_store_error final : public std::runtime_error {
 public:
   completed_evidence_store_error(
       completed_evidence_store_error_code code,
@@ -46,7 +48,7 @@ private:
 };
 
 /*! \brief FD-anchored immutable store keyed by completed-evidence identity. */
-class completed_application_evidence_store final {
+class PKGAPPLY_POSIX_API completed_application_evidence_store final {
 public:
   [[nodiscard]] static completed_application_evidence_store open(
       const std::string& directory);

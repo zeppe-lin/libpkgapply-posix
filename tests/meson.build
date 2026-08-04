@@ -4,6 +4,14 @@
 if get_option('tests').allowed()
   sh = find_program('sh')
 
+  version_header_test = executable(
+    'version-header-test',
+    'version_header_test.cpp',
+    dependencies: libpkgapply_posix_dep,
+  )
+  test('compile POSIX version header independently', version_header_test)
+
+
   posix_active_incoming_test = executable(
     'posix-active-incoming-test',
     'posix_active_incoming_test.cpp',
@@ -184,4 +192,45 @@ if get_option('tests').allowed()
       meson.project_source_root(),
     ],
   )
+  test(
+    'contract architecture-contract',
+    sh,
+    args: [join_paths(meson.current_source_dir(), 'contracts/check_architecture_contract.sh'), meson.project_source_root()],
+  )
+  test(
+    'contract abi-contract',
+    sh,
+    args: [join_paths(meson.current_source_dir(), 'contracts/check_abi_contract.sh'), meson.project_source_root()],
+  )
+  test(
+    'contract ci-contract',
+    sh,
+    args: [join_paths(meson.current_source_dir(), 'contracts/check_ci_contract.sh'), meson.project_source_root()],
+  )
+  test(
+    'contract documentation-contract',
+    sh,
+    args: [join_paths(meson.current_source_dir(), 'contracts/check_documentation_contract.sh'), meson.project_source_root()],
+  )
+  test(
+    'contract extraction-contract',
+    sh,
+    args: [join_paths(meson.current_source_dir(), 'contracts/check_extraction_contract.sh'), meson.project_source_root()],
+  )
+  test(
+    'contract release-contract',
+    sh,
+    args: [join_paths(meson.current_source_dir(), 'contracts/check_release_contract.sh'), meson.project_source_root()],
+  )
+  test(
+    'contract repository-contract',
+    sh,
+    args: [join_paths(meson.current_source_dir(), 'contracts/check_repository_contract.sh'), meson.project_source_root()],
+  )
+  test(
+    'contract style-contract',
+    sh,
+    args: [join_paths(meson.current_source_dir(), 'contracts/check_style_contract.sh'), meson.project_source_root()],
+  )
+
 endif

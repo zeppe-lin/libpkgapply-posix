@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <libpkgapply-posix/export.h>
+
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -43,7 +45,7 @@ enum class rejected_store_error_code : std::uint8_t {
 };
 
 /*! \brief POSIX rejected-object publication failure. */
-class rejected_store_error final : public std::runtime_error {
+class PKGAPPLY_POSIX_API rejected_store_error final : public std::runtime_error {
 public:
   rejected_store_error(rejected_store_error_code code,
                        int system_error,
@@ -67,7 +69,7 @@ enum class rejected_object_source : std::uint8_t {
 };
 
 /*! \brief Stable read-only descriptor for one rejected regular payload. */
-class rejected_regular_object final {
+class PKGAPPLY_POSIX_API rejected_regular_object final {
 public:
   rejected_regular_object(const rejected_regular_object&) = delete;
   rejected_regular_object& operator=(const rejected_regular_object&) = delete;
@@ -87,7 +89,7 @@ private:
 };
 
 /*! \brief One immutable rejected record reopened from canonical storage. */
-class published_rejected_object final {
+class PKGAPPLY_POSIX_API published_rejected_object final {
 public:
   published_rejected_object(const published_rejected_object&) = delete;
   published_rejected_object& operator=(const published_rejected_object&) = delete;
@@ -113,7 +115,7 @@ private:
 };
 
 /*! \brief FD-anchored attempt-scoped immutable rejected-object namespace. */
-class application_rejected_object_store final {
+class PKGAPPLY_POSIX_API application_rejected_object_store final {
 public:
   [[nodiscard]] static application_rejected_object_store open(
       const std::string& directory);

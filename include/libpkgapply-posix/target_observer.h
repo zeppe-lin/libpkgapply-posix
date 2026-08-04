@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <libpkgapply-posix/export.h>
+
 #include <cstdint>
 #include <stdexcept>
 #include <string>
@@ -24,7 +26,7 @@ enum class target_observer_error_code : std::uint8_t {
 };
 
 /*! \brief POSIX observation failure that cannot be represented as path truth. */
-class target_observer_error final : public std::runtime_error {
+class PKGAPPLY_POSIX_API target_observer_error final : public std::runtime_error {
 public:
   target_observer_error(target_observer_error_code code,
                         int system_error,
@@ -42,7 +44,7 @@ private:
 };
 
 /*! \brief Expected logical anchor used to prove one hard-link relation. */
-class target_hardlink_expectation final {
+class PKGAPPLY_POSIX_API target_hardlink_expectation final {
 public:
   target_hardlink_expectation(pkgplan::package_path path,
                               pkgplan::package_path anchor);
@@ -56,7 +58,7 @@ private:
 };
 
 /*! \brief Read-only observer anchored to one already-selected target root. */
-class application_target_observer final {
+class PKGAPPLY_POSIX_API application_target_observer final {
 public:
   /*! \brief Open a real directory without following a final symlink. */
   [[nodiscard]] static application_target_observer open(

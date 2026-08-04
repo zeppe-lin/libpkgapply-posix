@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <libpkgapply-posix/export.h>
+
 #include <cstdint>
 #include <optional>
 #include <stdexcept>
@@ -27,7 +29,7 @@ enum class journal_store_error_code : std::uint8_t {
 };
 
 /*! \brief I/O, corruption, or monotonicity failure in durable journal storage. */
-class journal_store_error final : public std::runtime_error {
+class PKGAPPLY_POSIX_API journal_store_error final : public std::runtime_error {
 public:
   journal_store_error(
       journal_store_error_code code,
@@ -46,7 +48,7 @@ private:
 };
 
 /*! \brief Atomic FD-anchored store for one snapshot per journal identity. */
-class application_journal_store final {
+class PKGAPPLY_POSIX_API application_journal_store final {
 public:
   /*! \brief Open a real directory without following a final symlink. */
   [[nodiscard]] static application_journal_store open(

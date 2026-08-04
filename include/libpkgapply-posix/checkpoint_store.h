@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <libpkgapply-posix/export.h>
+
 #include <cstdint>
 #include <optional>
 #include <stdexcept>
@@ -27,7 +29,7 @@ enum class checkpoint_store_error_code : std::uint8_t {
 };
 
 /*! \brief I/O, corruption, or immutability failure in checkpoint storage. */
-class checkpoint_store_error final : public std::runtime_error {
+class PKGAPPLY_POSIX_API checkpoint_store_error final : public std::runtime_error {
 public:
   checkpoint_store_error(
       checkpoint_store_error_code code,
@@ -46,7 +48,7 @@ private:
 };
 
 /*! \brief Immutable FD-anchored checkpoint store keyed by journal snapshot. */
-class application_restart_checkpoint_store final {
+class PKGAPPLY_POSIX_API application_restart_checkpoint_store final {
 public:
   [[nodiscard]] static application_restart_checkpoint_store open(
       const std::string& directory);

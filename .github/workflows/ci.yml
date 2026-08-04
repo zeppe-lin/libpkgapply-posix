@@ -1,0 +1,56 @@
+name: ci
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {name: GCC shared, cc: gcc, cxx: g++, mode: shared, man: enabled}
+          - {name: GCC static, cc: gcc, cxx: g++, mode: static, man: disabled}
+          - {name: Clang shared, cc: clang, cxx: clang++, mode: shared, man: disabled}
+          - {name: Clang static, cc: clang, cxx: clang++, mode: static, man: disabled}
+    name: ${{ matrix.name }}
+    env: {CC: '${{ matrix.cc }}', CXX: '${{ matrix.cxx }}'}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with: {repository: zeppe-lin/libpkgimage, ref: v0.4.0, path: dependencies/libpkgimage}
+      - uses: actions/checkout@v4
+        with: {repository: zeppe-lin/libpkgplan, ref: v0.3.0, path: dependencies/libpkgplan}
+      - uses: actions/checkout@v4
+        with: {repository: zeppe-lin/libpkgsource, ref: v3.0.0, path: dependencies/libpkgsource}
+      - uses: actions/checkout@v4
+        with: {repository: zeppe-lin/libpkgsource-plan, ref: v1.0.0, path: dependencies/libpkgsource-plan}
+      - uses: actions/checkout@v4
+        with: {repository: zeppe-lin/libpkgbuild, ref: v2.0.0, path: dependencies/libpkgbuild}
+      - uses: actions/checkout@v4
+        with: {repository: zeppe-lin/libpkgapply, ref: v3.0.0, path: dependencies/libpkgapply}
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang clang-format-17 binutils libarchive-dev libssl-dev mandoc ninja-build pkg-config python3-venv scdoc
+          python3 -m venv "$RUNNER_TEMP/meson"
+          "$RUNNER_TEMP/meson/bin/pip" install 'meson==1.10.2'
+          echo "$RUNNER_TEMP/meson/bin" >> "$GITHUB_PATH"
+      - name: Build and test
+        env:
+          LIBPKGIMAGE_SOURCE: dependencies/libpkgimage
+          LIBPKGPLAN_SOURCE: dependencies/libpkgplan
+          LIBPKGSOURCE_SOURCE: dependencies/libpkgsource
+          LIBPKGSOURCE_PLAN_SOURCE: dependencies/libpkgsource-plan
+          LIBPKGBUILD_SOURCE: dependencies/libpkgbuild
+          LIBPKGAPPLY_SOURCE: dependencies/libpkgapply
+        run: ci/configure-and-test.sh build '${{ matrix.mode }}' -Dman_pages='${{ matrix.man }}'
+      - name: Qualify install
+        run: ci/qualify-installed.sh build '${{ matrix.mode }}'
+      - name: Lint manual
+        if: matrix.man == 'enabled'
+        run: find build/product/man -type f -name '*.3' -exec mandoc -Tlint {} +

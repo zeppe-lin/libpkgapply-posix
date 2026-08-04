@@ -3,6 +3,11 @@
 
 #pragma once
 
+#include <libpkgapply-posix/export.h>
+#include <libpkgapply-posix/version.h>
+
+#include <libpkgapply-posix/export.h>
+
 #include <libpkgapply-posix/backend.h>
 #include <libpkgapply-posix/capture_store.h>
 #include <libpkgapply-posix/completed_evidence_store.h>

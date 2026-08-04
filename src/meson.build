@@ -4,9 +4,12 @@
 public_inc = include_directories('../include')
 private_inc = include_directories('.')
 
+elf_export_script_path = meson.project_source_root() / 'abi/libpkgapply-posix.exports'
+
 libpkgapply_posix = library(
   'pkgapply-posix',
   [
+    'version.cpp',
     'backend.cpp',
     'active_namespace.cpp',
     'active_workspace.cpp',
@@ -20,6 +23,10 @@ libpkgapply_posix = library(
     'target_observer.cpp',
   ],
   include_directories: [public_inc, private_inc],
+  cpp_args: visibility_cpp_args + ['-DPKGAPPLY_POSIX_BUILDING_LIBRARY'],
+  gnu_symbol_visibility: 'hidden',
+  link_args: ['-Wl,--version-script=' + elf_export_script_path],
+  link_depends: files('../abi/libpkgapply-posix.exports'),
   dependencies: [
     libpkgapply_dep,
     libpkgimage_dep,
@@ -41,6 +48,8 @@ meson.override_dependency('libpkgapply-posix', libpkgapply_posix_dep)
 
 install_headers(
   '../include/libpkgapply-posix/backend.h',
+  '../include/libpkgapply-posix/export.h',
+  '../include/libpkgapply-posix/version.h',
   '../include/libpkgapply-posix/libpkgapply-posix.h',
   '../include/libpkgapply-posix/capture_store.h',
   '../include/libpkgapply-posix/completed_evidence_store.h',

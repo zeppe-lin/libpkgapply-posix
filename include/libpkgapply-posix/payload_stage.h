@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <libpkgapply-posix/export.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -41,7 +43,7 @@ enum class payload_stage_error_code : std::uint8_t {
 };
 
 /*! \brief POSIX staging failure before active-target mutation authority. */
-class payload_stage_error final : public std::runtime_error {
+class PKGAPPLY_POSIX_API payload_stage_error final : public std::runtime_error {
 public:
   payload_stage_error(payload_stage_error_code code,
                       int system_error,
@@ -56,7 +58,7 @@ private:
 };
 
 /*! \brief Validated read-only descriptor for one sealed regular payload. */
-class staged_regular_payload final {
+class PKGAPPLY_POSIX_API staged_regular_payload final {
 public:
   staged_regular_payload(const staged_regular_payload&) = delete;
   staged_regular_payload& operator=(const staged_regular_payload&) = delete;
@@ -80,7 +82,7 @@ private:
 };
 
 /*! \brief Exact immutable payload set reopened from one sealed attempt stage. */
-class sealed_application_payloads final {
+class PKGAPPLY_POSIX_API sealed_application_payloads final {
 public:
   sealed_application_payloads(const sealed_application_payloads&) = delete;
   sealed_application_payloads& operator=(const sealed_application_payloads&) = delete;
@@ -102,7 +104,7 @@ private:
 };
 
 /*! \brief Backend payload sink backed by one private attempt directory. */
-class application_payload_stage final : public incoming_payload_stage {
+class PKGAPPLY_POSIX_API application_payload_stage final : public incoming_payload_stage {
 public:
   application_payload_stage(const application_payload_stage&) = delete;
   application_payload_stage& operator=(const application_payload_stage&) = delete;
@@ -127,7 +129,7 @@ private:
 };
 
 /*! \brief FD-anchored namespace for private incoming regular payloads. */
-class application_payload_store final {
+class PKGAPPLY_POSIX_API application_payload_store final {
 public:
   [[nodiscard]] static application_payload_store open(
       const std::string& directory);

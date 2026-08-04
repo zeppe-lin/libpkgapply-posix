@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <libpkgapply-posix/libpkgapply-posix.h>
-#include <libpkgapply/version.h>
 
 #include <type_traits>
 
@@ -15,5 +14,8 @@ static_assert(std::is_base_of_v<
 
 int main()
 {
-  return pkgapply::version() == "2.3.0" ? 0 : 1;
+  return pkgapply::posix::version() == "3.0.0" &&
+             pkgapply::posix::api_version == 2
+         ? 0
+         : 1;
 }

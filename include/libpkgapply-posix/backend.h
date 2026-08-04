@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <libpkgapply-posix/export.h>
+
 #include <cstdint>
 #include <memory>
 #include <stdexcept>
@@ -26,7 +28,7 @@ enum class posix_backend_error_code : std::uint8_t {
 };
 
 /*! \brief Configuration, binding, or restart failure in backend composition. */
-class posix_backend_error final : public std::runtime_error {
+class PKGAPPLY_POSIX_API posix_backend_error final : public std::runtime_error {
 public:
   posix_backend_error(posix_backend_error_code code,
                       int system_error,
@@ -47,7 +49,7 @@ private:
  * directory descriptor.  Pathnames are not retained and replacing a pathname
  * after construction cannot redirect a live backend or transaction.
  */
-class application_posix_backend final : public application_backend {
+class PKGAPPLY_POSIX_API application_posix_backend final : public application_backend {
 public:
   /*!
    * \brief Construct from already-selected directory authorities.

@@ -629,6 +629,8 @@ payload_stage_error::payload_stage_error(payload_stage_error_code code,
 {
 }
 
+payload_stage_error::~payload_stage_error() = default;
+
 payload_stage_error_code
 payload_stage_error::code() const noexcept
 {

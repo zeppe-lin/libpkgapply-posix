@@ -356,6 +356,8 @@ journal_store_error::journal_store_error(
 {
 }
 
+journal_store_error::~journal_store_error() = default;
+
 journal_store_error_code journal_store_error::code() const noexcept
 {
   return code_;

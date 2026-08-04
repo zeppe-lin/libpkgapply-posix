@@ -1064,6 +1064,8 @@ posix_backend_error::posix_backend_error(posix_backend_error_code code,
 {
 }
 
+posix_backend_error::~posix_backend_error() = default;
+
 posix_backend_error_code posix_backend_error::code() const noexcept
 { return code_; }
 int posix_backend_error::system_error() const noexcept

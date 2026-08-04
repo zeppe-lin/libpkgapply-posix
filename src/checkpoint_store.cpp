@@ -381,6 +381,8 @@ checkpoint_store_error::checkpoint_store_error(
 {
 }
 
+checkpoint_store_error::~checkpoint_store_error() = default;
+
 checkpoint_store_error_code checkpoint_store_error::code() const noexcept
 {
   return code_;

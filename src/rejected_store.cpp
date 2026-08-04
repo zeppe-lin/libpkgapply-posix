@@ -1580,6 +1580,8 @@ rejected_store_error::rejected_store_error(
 {
 }
 
+rejected_store_error::~rejected_store_error() = default;
+
 rejected_store_error_code rejected_store_error::code() const noexcept
 { return code_; }
 int rejected_store_error::system_error() const noexcept

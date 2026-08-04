@@ -49,6 +49,8 @@ public:
                       int system_error,
                       std::string message);
 
+  ~payload_stage_error() override;
+
   [[nodiscard]] payload_stage_error_code code() const noexcept;
   [[nodiscard]] int system_error() const noexcept;
 

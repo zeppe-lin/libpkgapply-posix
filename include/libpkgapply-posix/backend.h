@@ -34,6 +34,8 @@ public:
                       int system_error,
                       std::string message);
 
+  ~posix_backend_error() override;
+
   [[nodiscard]] posix_backend_error_code code() const noexcept;
   [[nodiscard]] int system_error() const noexcept;
 

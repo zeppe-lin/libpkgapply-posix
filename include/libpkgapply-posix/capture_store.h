@@ -55,6 +55,8 @@ public:
                       std::string path,
                       std::string message);
 
+  ~capture_store_error() override;
+
   [[nodiscard]] capture_store_error_code code() const noexcept;
   [[nodiscard]] int system_error() const noexcept;
   [[nodiscard]] const std::string& path() const noexcept;

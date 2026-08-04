@@ -33,6 +33,8 @@ public:
                               int system_error,
                               std::string message);
 
+  ~target_mutation_lease_error() override;
+
   [[nodiscard]] target_mutation_lease_error_code code() const noexcept;
   [[nodiscard]] int system_error() const noexcept;
 

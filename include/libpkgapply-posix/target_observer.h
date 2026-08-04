@@ -33,6 +33,8 @@ public:
                         std::string path,
                         std::string message);
 
+  ~target_observer_error() override;
+
   [[nodiscard]] target_observer_error_code code() const noexcept;
   [[nodiscard]] int system_error() const noexcept;
   [[nodiscard]] const std::string& path() const noexcept;

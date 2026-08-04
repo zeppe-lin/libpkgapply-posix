@@ -1412,6 +1412,8 @@ capture_store_error::capture_store_error(
 {
 }
 
+capture_store_error::~capture_store_error() = default;
+
 capture_store_error_code capture_store_error::code() const noexcept
 { return code_; }
 int capture_store_error::system_error() const noexcept

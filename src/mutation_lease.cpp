@@ -145,6 +145,8 @@ target_mutation_lease_error::target_mutation_lease_error(
 {
 }
 
+target_mutation_lease_error::~target_mutation_lease_error() = default;
+
 target_mutation_lease_error_code
 target_mutation_lease_error::code() const noexcept
 {

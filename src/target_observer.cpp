@@ -408,6 +408,8 @@ target_observer_error::target_observer_error(
 {
 }
 
+target_observer_error::~target_observer_error() = default;
+
 target_observer_error_code target_observer_error::code() const noexcept
 { return code_; }
 int target_observer_error::system_error() const noexcept

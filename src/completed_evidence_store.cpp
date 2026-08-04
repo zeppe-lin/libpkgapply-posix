@@ -397,6 +397,8 @@ completed_evidence_store_error::completed_evidence_store_error(
 {
 }
 
+completed_evidence_store_error::~completed_evidence_store_error() = default;
+
 completed_evidence_store_error_code
 completed_evidence_store_error::code() const noexcept
 {

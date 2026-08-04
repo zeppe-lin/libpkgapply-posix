@@ -11,3 +11,5 @@
   requirements.
 - Added hidden-by-default visibility, explicit API exports, repository
   contracts, installed-consumer qualification, and independent CI.
+- Anchored every public POSIX exception domain with an out-of-line owner
+  destructor.

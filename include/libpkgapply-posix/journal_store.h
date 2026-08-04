@@ -37,6 +37,8 @@ public:
       std::string message,
       bool replacement_visible = false);
 
+  ~journal_store_error() override;
+
   [[nodiscard]] journal_store_error_code code() const noexcept;
   [[nodiscard]] int system_error() const noexcept;
   [[nodiscard]] bool replacement_visible() const noexcept;

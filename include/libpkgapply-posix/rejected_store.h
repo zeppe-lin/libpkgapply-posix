@@ -52,6 +52,8 @@ public:
                        std::string path,
                        std::string message);
 
+  ~rejected_store_error() override;
+
   [[nodiscard]] rejected_store_error_code code() const noexcept;
   [[nodiscard]] int system_error() const noexcept;
   [[nodiscard]] const std::string& path() const noexcept;

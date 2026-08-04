@@ -37,6 +37,8 @@ public:
       std::string message,
       bool publication_visible = false);
 
+  ~completed_evidence_store_error() override;
+
   [[nodiscard]] completed_evidence_store_error_code code() const noexcept;
   [[nodiscard]] int system_error() const noexcept;
   [[nodiscard]] bool publication_visible() const noexcept;

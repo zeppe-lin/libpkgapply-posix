@@ -14,7 +14,9 @@ a native build of the extracted repository can produce and review its exact
 symbol inventory. Before the first independent tag, maintainers must capture
 that inventory from both GCC and Clang shared builds and either narrow the map
 or record the accepted set in this document. No symbol list has been invented
-without a linkable dependency closure.
+without a linkable dependency closure. Public exception vtables and RTTI are
+already anchored by out-of-line owner destructors rather than emitted weakly by
+consumers.
 
 Public headers expose `libpkgapply` and `libpkgimage` value types directly;
 those dependencies belong in pkg-config `Requires`. Direct `libpkgplan` use is

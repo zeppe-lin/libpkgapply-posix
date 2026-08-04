@@ -1,0 +1,80 @@
+{
+  "project": "libpkgapply-posix",
+  "documents": [
+    {
+      "source": "README.md",
+      "output": "index.html",
+      "title": "libpkgapply-posix"
+    },
+    {
+      "source": "CONTRIBUTING.md",
+      "output": "contributing.html",
+      "title": "Contributing"
+    },
+    {
+      "source": "HISTORY.md",
+      "output": "history.html",
+      "title": "History"
+    },
+    {
+      "source": "MAINTAINING.md",
+      "output": "maintaining.html",
+      "title": "Maintaining libpkgapply-posix"
+    },
+    {
+      "source": "docs/abi.md",
+      "output": "abi.html",
+      "title": "ELF ABI policy"
+    },
+    {
+      "source": "docs/architecture.md",
+      "output": "architecture.html",
+      "title": "Architecture"
+    },
+    {
+      "source": "docs/code-style.md",
+      "output": "code-style.html",
+      "title": "Code style"
+    },
+    {
+      "source": "docs/history/libpkgapply-2.3-extraction.md",
+      "output": "history/libpkgapply-2.3-extraction.html",
+      "title": "Extraction from libpkgapply 2.3.0"
+    },
+    {
+      "source": "docs/html.md",
+      "output": "html-documentation.html",
+      "title": "HTML documentation"
+    },
+    {
+      "source": "docs/integration.md",
+      "output": "integration.html",
+      "title": "Integration"
+    },
+    {
+      "source": "docs/man/libpkgapply-posix.3.md",
+      "output": "manual/libpkgapply-posix.3.html",
+      "title": "LIBPKGAPPLY-POSIX(3) libpkgapply-posix"
+    },
+    {
+      "source": "docs/manpage-markdown.md",
+      "output": "manpage-markdown.html",
+      "title": "Manual-page Markdown"
+    },
+    {
+      "source": "docs/mechanisms.md",
+      "output": "mechanisms.html",
+      "title": "POSIX mechanism protocols"
+    },
+    {
+      "source": "docs/qualification.md",
+      "output": "qualification.html",
+      "title": "POSIX mechanism qualification"
+    },
+    {
+      "source": "docs/testing.md",
+      "output": "testing.html",
+      "title": "Testing contract"
+    }
+  ]
+}

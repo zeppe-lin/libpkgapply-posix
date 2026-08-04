@@ -1,0 +1,66 @@
+/* SPDX-FileCopyrightText: 2026 Alexandr Savca */
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+:root {
+  color-scheme: light dark;
+  --background: #f5f3ec;
+  --foreground: #171717;
+  --muted: #5d5a52;
+  --panel: #ebe8de;
+  --border: #b7b1a2;
+  --accent: #5846a6;
+  --code: #e3dfd2;
+  font-family: system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #111214;
+    --foreground: #e9e7df;
+    --muted: #b3afa4;
+    --panel: #1b1d20;
+    --border: #42464d;
+    --accent: #b4a7ff;
+    --code: #24272b;
+  }
+}
+html { background: var(--background); color: var(--foreground); }
+body {
+  box-sizing: border-box;
+  line-height: 1.55;
+  margin: 0 auto;
+  max-width: 78rem;
+  padding: 1.5rem clamp(1rem, 4vw, 4rem) 4rem;
+}
+.house-nav {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem 1.2rem;
+  margin-bottom: 2.5rem;
+  padding-bottom: 1rem;
+}
+.house-nav a, a { color: var(--accent); }
+.house-nav .project {
+  color: var(--foreground);
+  font-weight: 700;
+  margin-right: auto;
+  text-decoration: none;
+}
+h1, h2, h3 { line-height: 1.2; }
+h2 { border-bottom: 1px solid var(--border); padding-bottom: 0.25rem; }
+code, pre { background: var(--code); border-radius: 0.25rem; }
+code { padding: 0.08rem 0.25rem; }
+pre { overflow-x: auto; padding: 1rem; }
+blockquote {
+  border-left: 0.25rem solid var(--border);
+  color: var(--muted);
+  margin-left: 0;
+  padding-left: 1rem;
+}
+.house-footer {
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-top: 3rem;
+  padding-top: 1rem;
+}

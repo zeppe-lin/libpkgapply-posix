@@ -41,3 +41,8 @@ grep -F 'libpkgapply.so.2' "$root/ci/audit-shared-boundary.sh" >/dev/null ||
   fail 'shared audit omits the semantic core SONAME'
 grep -F 'libpkgplan.so.1' "$root/ci/audit-shared-boundary.sh" >/dev/null ||
   fail 'shared audit omits the direct planner mechanism edge'
+
+grep -F 'html_docs: enabled' "$root/.github/workflows/ci.yml" >/dev/null || fail 'GCC shared HTML build is absent'
+grep -F 'pandoc' "$root/.github/workflows/ci.yml" >/dev/null || fail 'Pandoc qualification dependency is absent'
+grep -F -- '-Dhtml_docs=' "$root/.github/workflows/ci.yml" >/dev/null || fail 'HTML Meson feature is not configured'
+grep -F 'qualify-html-docs.sh' "$root/.github/workflows/ci.yml" >/dev/null || fail 'installed HTML qualification is absent'

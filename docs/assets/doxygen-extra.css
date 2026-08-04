@@ -1,0 +1,7 @@
+/* SPDX-FileCopyrightText: 2026 Alexandr Savca */
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+:root {
+  --primary-color: #5846a6;
+  --primary-dark-color: #40327d;
+  --primary-light-color: #b4a7ff;
+}

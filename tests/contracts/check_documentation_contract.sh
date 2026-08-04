@@ -7,3 +7,8 @@ grep -F 'does not construct package plans' "$root/README.md" >/dev/null || fail 
 grep -F 'descriptor-anchored' "$root/docs/architecture.md" >/dev/null || fail 'authority retention not documented'
 python3 "$root/tools/check-public-documentation.py" \
   "$root" libpkgapply-posix libpkgapply-posix.h
+
+python3 "$root/tools/check-man-markdown.py" \
+  --root "$root" --project libpkgapply-posix --version 3.0.0
+python3 "$root/tools/check-html-manifest.py" \
+  --root "$root" --project libpkgapply-posix

@@ -19,3 +19,10 @@ option(
   value: 'auto',
   description: 'Install the libpkgapply-posix manual page',
 )
+
+option(
+  'html_docs',
+  type: 'feature',
+  value: 'disabled',
+  description: 'Generate and install versioned static HTML documentation',
+)

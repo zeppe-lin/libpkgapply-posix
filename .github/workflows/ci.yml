@@ -29,30 +29,35 @@ jobs:
             mode: shared
             buildtype: debug
             man_pages: enabled
+            html_docs: enabled
           - name: GCC static
             cc: gcc
             cxx: g++
             mode: static
             buildtype: debug
             man_pages: disabled
+            html_docs: disabled
           - name: Clang shared
             cc: clang
             cxx: clang++
             mode: shared
             buildtype: debug
             man_pages: disabled
+            html_docs: disabled
           - name: Clang static
             cc: clang
             cxx: clang++
             mode: static
             buildtype: debug
             man_pages: disabled
+            html_docs: disabled
           - name: GCC release
             cc: gcc
             cxx: g++
             mode: shared
             buildtype: release
             man_pages: disabled
+            html_docs: disabled
     env:
       CC: ${{ matrix.cc }}
       CXX: ${{ matrix.cxx }}
@@ -93,7 +98,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends \
-            binutils clang doxygen libarchive-dev libssl-dev mandoc \
+            binutils clang doxygen libarchive-dev libssl-dev mandoc pandoc \
             ninja-build pkg-config python3-venv scdoc
           python3 -m venv "$RUNNER_TEMP/meson"
           "$RUNNER_TEMP/meson/bin/pip" install 'meson==1.10.2'
@@ -109,7 +114,8 @@ jobs:
         run: |
           ./ci/configure-and-test.sh build "${{ matrix.mode }}" \
             --buildtype="${{ matrix.buildtype }}" \
-            -Dman_pages="${{ matrix.man_pages }}"
+            -Dman_pages="${{ matrix.man_pages }}" \
+            -Dhtml_docs="${{ matrix.html_docs }}"
       - name: Qualify public API documentation
         if: matrix.name == 'GCC shared'
         run: doxygen Doxyfile
@@ -118,6 +124,9 @@ jobs:
         run: ./ci/lint-manpages.sh build
       - name: Qualify installed product
         run: ./ci/qualify-installed.sh build "${{ matrix.mode }}"
+      - name: Qualify installed HTML documentation
+        if: matrix.html_docs == 'enabled'
+        run: ./ci/qualify-html-docs.sh build libpkgapply-posix 3.0.0
 
   sanitizers:
     name: ${{ matrix.name }} address,undefined
@@ -191,5 +200,6 @@ jobs:
           ./ci/configure-and-test.sh build-sanitize shared \
             --buildtype=debug \
             -Dman_pages=disabled \
+            -Dhtml_docs=disabled \
             -Db_sanitize=address,undefined \
             -Db_lundef=false

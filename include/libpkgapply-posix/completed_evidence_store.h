@@ -80,8 +80,10 @@ public:
   [[nodiscard]] static completed_application_evidence_store from_directory_fd(
       int directory_fd);
 
+  /*! \brief Provider objects forbid copy construction. */
   completed_application_evidence_store(
       const completed_application_evidence_store&) = delete;
+  /*! \brief Provider objects forbid copy assignment. */
   completed_application_evidence_store& operator=(
       const completed_application_evidence_store&) = delete;
   /*! \brief Move one descriptor-anchored completed-evidence store. */

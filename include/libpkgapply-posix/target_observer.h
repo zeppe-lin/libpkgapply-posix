@@ -98,7 +98,9 @@ public:
   [[nodiscard]] static application_target_observer from_directory_fd(
       int directory_fd);
 
+  /*! \brief Provider objects forbid copy construction. */
   application_target_observer(const application_target_observer&) = delete;
+  /*! \brief Provider objects forbid copy assignment. */
   application_target_observer& operator=(
       const application_target_observer&) = delete;
   application_target_observer(application_target_observer&& other) noexcept;

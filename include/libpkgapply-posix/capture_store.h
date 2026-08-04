@@ -83,7 +83,9 @@ private:
 /*! \brief Stable read-only descriptor for one captured regular object. */
 class PKGAPPLY_POSIX_API captured_regular_object final {
 public:
+  /*! \brief Provider objects forbid copy construction. */
   captured_regular_object(const captured_regular_object&) = delete;
+  /*! \brief Provider objects forbid copy assignment. */
   captured_regular_object& operator=(const captured_regular_object&) = delete;
   /*! \brief Move one owned captured-object descriptor. */
   captured_regular_object(captured_regular_object&& other) noexcept;
@@ -108,7 +110,9 @@ private:
 /*! \brief One immutable old-object capture reopened from private storage. */
 class PKGAPPLY_POSIX_API captured_old_object final {
 public:
+  /*! \brief Provider objects forbid copy construction. */
   captured_old_object(const captured_old_object&) = delete;
+  /*! \brief Provider objects forbid copy assignment. */
   captured_old_object& operator=(const captured_old_object&) = delete;
   /*! \brief Move one reopened capture authority. */
   captured_old_object(captured_old_object&& other) noexcept;
@@ -162,7 +166,9 @@ public:
       int directory_fd,
       int target_root_fd);
 
+  /*! \brief Provider objects forbid copy construction. */
   application_capture_store(const application_capture_store&) = delete;
+  /*! \brief Provider objects forbid copy assignment. */
   application_capture_store& operator=(const application_capture_store&) = delete;
   /*! \brief Move one descriptor-anchored capture store. */
   application_capture_store(application_capture_store&& other) noexcept;

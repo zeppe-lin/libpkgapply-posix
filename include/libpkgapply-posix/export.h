@@ -1,6 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexandr Savca
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+/*! \file export.h
+ *  \brief Public symbol-visibility contract for libpkgapply-posix.
+ */
+
 #pragma once
 
 #if defined(_WIN32) || defined(__CYGWIN__)

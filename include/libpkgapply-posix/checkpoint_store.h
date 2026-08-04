@@ -80,8 +80,10 @@ public:
   [[nodiscard]] static application_restart_checkpoint_store from_directory_fd(
       int directory_fd);
 
+  /*! \brief Provider objects forbid copy construction. */
   application_restart_checkpoint_store(
       const application_restart_checkpoint_store&) = delete;
+  /*! \brief Provider objects forbid copy assignment. */
   application_restart_checkpoint_store& operator=(
       const application_restart_checkpoint_store&) = delete;
   /*! \brief Move one descriptor-anchored checkpoint store. */

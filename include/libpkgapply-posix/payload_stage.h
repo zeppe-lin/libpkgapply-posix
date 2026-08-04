@@ -73,7 +73,9 @@ private:
 /*! \brief Validated read-only descriptor for one sealed regular payload. */
 class PKGAPPLY_POSIX_API staged_regular_payload final {
 public:
+  /*! \brief Provider objects forbid copy construction. */
   staged_regular_payload(const staged_regular_payload&) = delete;
+  /*! \brief Provider objects forbid copy assignment. */
   staged_regular_payload& operator=(const staged_regular_payload&) = delete;
   /*! \brief Move one owned payload descriptor. */
   staged_regular_payload(staged_regular_payload&& other) noexcept;
@@ -103,7 +105,9 @@ private:
 /*! \brief Exact immutable payload set reopened from one sealed attempt stage. */
 class PKGAPPLY_POSIX_API sealed_application_payloads final {
 public:
+  /*! \brief Provider objects forbid copy construction. */
   sealed_application_payloads(const sealed_application_payloads&) = delete;
+  /*! \brief Provider objects forbid copy assignment. */
   sealed_application_payloads& operator=(const sealed_application_payloads&) = delete;
   /*! \brief Move one reopened sealed payload authority. */
   sealed_application_payloads(sealed_application_payloads&& other) noexcept;
@@ -139,9 +143,13 @@ private:
 /*! \brief Backend payload sink backed by one private attempt directory. */
 class PKGAPPLY_POSIX_API application_payload_stage final : public incoming_payload_stage {
 public:
+  /*! \brief Provider objects forbid copy construction. */
   application_payload_stage(const application_payload_stage&) = delete;
+  /*! \brief Provider objects forbid copy assignment. */
   application_payload_stage& operator=(const application_payload_stage&) = delete;
+  /*! \brief Provider objects forbid move construction. */
   application_payload_stage(application_payload_stage&&) = delete;
+  /*! \brief Provider objects forbid move assignment. */
   application_payload_stage& operator=(application_payload_stage&&) = delete;
   /*! \brief Abandon an unsealed stage and release private resources. */
   ~application_payload_stage() override;
@@ -196,7 +204,9 @@ public:
   [[nodiscard]] static application_payload_store from_directory_fd(
       int directory_fd);
 
+  /*! \brief Provider objects forbid copy construction. */
   application_payload_store(const application_payload_store&) = delete;
+  /*! \brief Provider objects forbid copy assignment. */
   application_payload_store& operator=(const application_payload_store&) = delete;
   /*! \brief Move one descriptor-anchored payload store. */
   application_payload_store(application_payload_store&& other) noexcept;

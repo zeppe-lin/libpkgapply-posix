@@ -92,9 +92,13 @@ public:
                      int rejected_store_fd,
                      int completed_evidence_store_fd);
 
+  /*! \brief Provider objects forbid copy construction. */
   application_posix_backend(const application_posix_backend&) = delete;
+  /*! \brief Provider objects forbid copy assignment. */
   application_posix_backend& operator=(const application_posix_backend&) = delete;
+  /*! \brief Provider objects forbid move construction. */
   application_posix_backend(application_posix_backend&&) = delete;
+  /*! \brief Provider objects forbid move assignment. */
   application_posix_backend& operator=(application_posix_backend&&) = delete;
   /*! \brief Release all retained provider authorities. */
   ~application_posix_backend() override;

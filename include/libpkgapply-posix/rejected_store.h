@@ -86,7 +86,9 @@ enum class rejected_object_source : std::uint8_t {
 /*! \brief Stable read-only descriptor for one rejected regular payload. */
 class PKGAPPLY_POSIX_API rejected_regular_object final {
 public:
+  /*! \brief Provider objects forbid copy construction. */
   rejected_regular_object(const rejected_regular_object&) = delete;
+  /*! \brief Provider objects forbid copy assignment. */
   rejected_regular_object& operator=(const rejected_regular_object&) = delete;
   /*! \brief Move one owned rejected-payload descriptor. */
   rejected_regular_object(rejected_regular_object&& other) noexcept;
@@ -111,7 +113,9 @@ private:
 /*! \brief One immutable rejected record reopened from canonical storage. */
 class PKGAPPLY_POSIX_API published_rejected_object final {
 public:
+  /*! \brief Provider objects forbid copy construction. */
   published_rejected_object(const published_rejected_object&) = delete;
+  /*! \brief Provider objects forbid copy assignment. */
   published_rejected_object& operator=(const published_rejected_object&) = delete;
   /*! \brief Move one reopened rejected-record authority. */
   published_rejected_object(published_rejected_object&& other) noexcept;
@@ -165,8 +169,10 @@ public:
   [[nodiscard]] static application_rejected_object_store from_directory_fd(
       int directory_fd);
 
+  /*! \brief Provider objects forbid copy construction. */
   application_rejected_object_store(
       const application_rejected_object_store&) = delete;
+  /*! \brief Provider objects forbid copy assignment. */
   application_rejected_object_store& operator=(
       const application_rejected_object_store&) = delete;
   /*! \brief Move one descriptor-anchored rejected-object store. */

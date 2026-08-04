@@ -81,7 +81,9 @@ public:
   [[nodiscard]] static application_journal_store from_directory_fd(
       int directory_fd);
 
+  /*! \brief Provider objects forbid copy construction. */
   application_journal_store(const application_journal_store&) = delete;
+  /*! \brief Provider objects forbid copy assignment. */
   application_journal_store& operator=(const application_journal_store&) = delete;
   /*! \brief Move one descriptor-anchored journal store. */
   application_journal_store(application_journal_store&& other) noexcept;

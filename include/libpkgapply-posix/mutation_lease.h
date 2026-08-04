@@ -82,9 +82,13 @@ public:
       const application_target_context& target,
       int lock_directory_fd);
 
+  /*! \brief Provider objects forbid copy construction. */
   target_mutation_lease(const target_mutation_lease&) = delete;
+  /*! \brief Provider objects forbid copy assignment. */
   target_mutation_lease& operator=(const target_mutation_lease&) = delete;
+  /*! \brief Provider objects forbid move construction. */
   target_mutation_lease(target_mutation_lease&&) = delete;
+  /*! \brief Provider objects forbid move assignment. */
   target_mutation_lease& operator=(target_mutation_lease&&) = delete;
   /*! \brief Release the advisory lock and retained descriptors. */
   ~target_mutation_lease() override;

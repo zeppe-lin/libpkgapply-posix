@@ -7,6 +7,7 @@ for p in include/libpkgapply-posix src abi docs tests man ci .github/workflows; 
 ! grep -R -E 'subprojects/|fallback:' "$root/meson.build" "$root/src/meson.build" >/dev/null || fail 'embedded dependency coupling present'
 
 test -x "$root/tools/check-public-documentation.py" || fail 'public documentation checker is absent'
+test -x "$root/tools/check-doxygen-contract.py" || fail 'Doxygen contract checker is absent'
 
 for tool in \
   build-html-docs.py check-html-docs.py install-html-docs.py \

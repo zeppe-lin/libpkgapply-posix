@@ -48,9 +48,15 @@ public:
   /*! \brief Destroy the polymorphic lease failure. */
   ~target_mutation_lease_error() override;
 
-  /*! \brief Return the stable mechanism failure class. */
+  /*!
+   * \brief Return the stable mechanism failure class.
+  *  \return The stable mechanism failure class.
+   */
   [[nodiscard]] target_mutation_lease_error_code code() const noexcept;
-  /*! \brief Return captured errno, or zero when inapplicable. */
+  /*!
+   * \brief Return captured errno, or zero when inapplicable.
+  *  \return Captured errno, or zero when inapplicable.
+   */
   [[nodiscard]] int system_error() const noexcept;
 
 private:
@@ -93,16 +99,28 @@ public:
   /*! \brief Release the advisory lock and retained descriptors. */
   ~target_mutation_lease() override;
 
-  /*! \brief Return exact mechanism-issued lease identity. */
+  /*!
+   * \brief Return exact mechanism-issued lease identity.
+  *  \return Exact mechanism-issued lease identity.
+   */
   [[nodiscard]] const mutation_lease_instance_identity&
   identity() const noexcept override;
-  /*! \brief Return exact bound target-context identity. */
+  /*!
+   * \brief Return exact bound target-context identity.
+  *  \return Exact bound target-context identity.
+   */
   [[nodiscard]] const application_target_context_identity&
   target() const noexcept override;
-  /*! \brief Return exact mutation-exclusion-domain identity. */
+  /*!
+   * \brief Return exact mutation-exclusion-domain identity.
+  *  \return Exact mutation-exclusion-domain identity.
+   */
   [[nodiscard]] const mutation_exclusion_domain_identity&
   exclusion_domain() const noexcept override;
-  /*! \brief Revalidate that named lock authority remains held. */
+  /*!
+   * \brief Revalidate that named lock authority remains held.
+  *  \return Whether the named lock authority remains held.
+   */
   [[nodiscard]] bool held() const noexcept override;
 
 private:

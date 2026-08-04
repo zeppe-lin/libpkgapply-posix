@@ -46,11 +46,20 @@ public:
   /*! \brief Destroy the polymorphic observation failure. */
   ~target_observer_error() override;
 
-  /*! \brief Return the stable mechanism failure class. */
+  /*!
+   * \brief Return the stable mechanism failure class.
+  *  \return The stable mechanism failure class.
+   */
   [[nodiscard]] target_observer_error_code code() const noexcept;
-  /*! \brief Return captured errno, or zero when inapplicable. */
+  /*!
+   * \brief Return captured errno, or zero when inapplicable.
+  *  \return Captured errno, or zero when inapplicable.
+   */
   [[nodiscard]] int system_error() const noexcept;
-  /*! \brief Return the exact diagnostic path. */
+  /*!
+   * \brief Return the exact diagnostic path.
+  *  \return The exact diagnostic path.
+   */
   [[nodiscard]] const std::string& path() const noexcept;
 
 private:
@@ -69,9 +78,15 @@ public:
   target_hardlink_expectation(pkgplan::package_path path,
                               pkgplan::package_path anchor);
 
-  /*! \brief Return the logical hard-link path. */
+  /*!
+   * \brief Return the logical hard-link path.
+  *  \return The logical hard-link path.
+   */
   [[nodiscard]] const pkgplan::package_path& path() const noexcept;
-  /*! \brief Return the expected logical anchor path. */
+  /*!
+   * \brief Return the expected logical anchor path.
+  *  \return The expected logical anchor path.
+   */
   [[nodiscard]] const pkgplan::package_path& anchor() const noexcept;
 
 private:
@@ -103,7 +118,14 @@ public:
   /*! \brief Provider objects forbid copy assignment. */
   application_target_observer& operator=(
       const application_target_observer&) = delete;
+  /*! \brief Transfer ownership of a retained target-root descriptor.
+   *  \param other Observer whose descriptor authority is transferred.
+   */
   application_target_observer(application_target_observer&& other) noexcept;
+  /*! \brief Transfer target-root descriptor authority by assignment.
+   *  \param other Observer whose descriptor authority is transferred.
+   *  \return Reference to this observer after the transfer.
+   */
   application_target_observer& operator=(
       application_target_observer&& other) noexcept;
   /*! \brief Close the retained target-root descriptor. */

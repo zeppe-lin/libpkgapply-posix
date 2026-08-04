@@ -7,6 +7,11 @@ grep -F 'does not construct package plans' "$root/README.md" >/dev/null || fail 
 grep -F 'descriptor-anchored' "$root/docs/architecture.md" >/dev/null || fail 'authority retention not documented'
 python3 "$root/tools/check-public-documentation.py" \
   "$root" libpkgapply-posix libpkgapply-posix.h
+if command -v clang++ >/dev/null 2>&1; then
+  python3 "$root/tools/check-doxygen-contract.py" \
+    --root "$root" --include-subdir libpkgapply-posix \
+    --namespace pkgapply --clang "$(command -v clang++)"
+fi
 
 python3 "$root/tools/check-man-markdown.py" \
   --root "$root" --project libpkgapply-posix --version 3.0.0

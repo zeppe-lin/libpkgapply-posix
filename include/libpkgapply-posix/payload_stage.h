@@ -60,9 +60,15 @@ public:
   /*! \brief Destroy the polymorphic store failure. */
   ~payload_stage_error() override;
 
-  /*! \brief Return the stable mechanism failure class. */
+  /*!
+   * \brief Return the stable mechanism failure class.
+  *  \return The stable mechanism failure class.
+   */
   [[nodiscard]] payload_stage_error_code code() const noexcept;
-  /*! \brief Return captured errno, or zero when inapplicable. */
+  /*!
+   * \brief Return captured errno, or zero when inapplicable.
+  *  \return Captured errno, or zero when inapplicable.
+   */
   [[nodiscard]] int system_error() const noexcept;
 
 private:
@@ -77,18 +83,34 @@ public:
   staged_regular_payload(const staged_regular_payload&) = delete;
   /*! \brief Provider objects forbid copy assignment. */
   staged_regular_payload& operator=(const staged_regular_payload&) = delete;
-  /*! \brief Move one owned payload descriptor. */
+  /*!
+   * \brief Move one owned payload descriptor.
+  *  \param other Source object whose owned resources are transferred.
+   */
   staged_regular_payload(staged_regular_payload&& other) noexcept;
-  /*! \brief Replace this owned descriptor by move. */
+  /*!
+   * \brief Replace this owned descriptor by move.
+  *  \param other Source object whose owned resources are transferred.
+  *  \return Reference to this object after taking ownership from @p other.
+   */
   staged_regular_payload& operator=(staged_regular_payload&& other) noexcept;
   /*! \brief Close the retained read-only descriptor. */
   ~staged_regular_payload();
 
-  /*! \brief Return the owned read-only descriptor. */
+  /*!
+   * \brief Return the owned read-only descriptor.
+  *  \return The owned read-only descriptor.
+   */
   [[nodiscard]] int descriptor() const noexcept;
-  /*! \brief Return the exact package-image entry identifier. */
+  /*!
+   * \brief Return the exact package-image entry identifier.
+  *  \return The exact package-image entry identifier.
+   */
   [[nodiscard]] pkgimage::entry_id entry() const noexcept;
-  /*! \brief Return the verified payload byte length. */
+  /*!
+   * \brief Return the verified payload byte length.
+  *  \return The verified payload byte length.
+   */
   [[nodiscard]] std::uint64_t size() const noexcept;
 
 private:
@@ -109,21 +131,40 @@ public:
   sealed_application_payloads(const sealed_application_payloads&) = delete;
   /*! \brief Provider objects forbid copy assignment. */
   sealed_application_payloads& operator=(const sealed_application_payloads&) = delete;
-  /*! \brief Move one reopened sealed payload authority. */
+  /*!
+   * \brief Move one reopened sealed payload authority.
+  *  \param other Source object whose owned resources are transferred.
+   */
   sealed_application_payloads(sealed_application_payloads&& other) noexcept;
-  /*! \brief Replace this reopened authority by move. */
+  /*!
+   * \brief Replace this reopened authority by move.
+  *  \param other Source object whose owned resources are transferred.
+  *  \return Reference to this object after taking ownership from @p other.
+   */
   sealed_application_payloads& operator=(
       sealed_application_payloads&& other) noexcept;
   /*! \brief Release all retained attempt and payload descriptors. */
   ~sealed_application_payloads();
 
-  /*! \brief Return the exact bound application attempt. */
+  /*!
+   * \brief Return the exact bound application attempt.
+  *  \return The exact bound application attempt.
+   */
   [[nodiscard]] const application_attempt& attempt() const noexcept;
-  /*! \brief Return the exact physical attempt nonce. */
+  /*!
+   * \brief Return the exact physical attempt nonce.
+  *  \return The exact physical attempt nonce.
+   */
   [[nodiscard]] const application_attempt_nonce& attempt_nonce() const noexcept;
-  /*! \brief Return the exact admitted image identity. */
+  /*!
+   * \brief Return the exact admitted image identity.
+  *  \return The exact admitted image identity.
+   */
   [[nodiscard]] const pkgimage::package_image_identity& image() const noexcept;
-  /*! \brief Return the exact sealed regular-entry selection. */
+  /*!
+   * \brief Return the exact sealed regular-entry selection.
+  *  \return The exact sealed regular-entry selection.
+   */
   [[nodiscard]] const pkgimage::entry_selection& selection() const noexcept;
   /*! \brief Open one selected regular payload after revalidation.
    *  \param entry Exact selected image entry.
@@ -176,7 +217,10 @@ public:
   [[nodiscard]] backend_operation_result seal() override;
   /*! \brief Discard unsealed private resources without rollback claims. */
   void abandon() noexcept override;
-  /*! \brief Return whether stage publication completed successfully. */
+  /*!
+   * \brief Return whether stage publication completed successfully.
+  *  \return Whether stage publication completed successfully.
+   */
   [[nodiscard]] bool sealed() const noexcept override;
 
 private:
@@ -208,9 +252,16 @@ public:
   application_payload_store(const application_payload_store&) = delete;
   /*! \brief Provider objects forbid copy assignment. */
   application_payload_store& operator=(const application_payload_store&) = delete;
-  /*! \brief Move one descriptor-anchored payload store. */
+  /*!
+   * \brief Move one descriptor-anchored payload store.
+  *  \param other Source object whose owned resources are transferred.
+   */
   application_payload_store(application_payload_store&& other) noexcept;
-  /*! \brief Replace this store authority by move. */
+  /*!
+   * \brief Replace this store authority by move.
+  *  \param other Source object whose owned resources are transferred.
+  *  \return Reference to this object after taking ownership from @p other.
+   */
   application_payload_store& operator=(
       application_payload_store&& other) noexcept;
   /*! \brief Close the retained store-directory descriptor. */

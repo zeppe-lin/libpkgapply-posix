@@ -45,9 +45,15 @@ public:
   /*! \brief Destroy the polymorphic backend failure. */
   ~posix_backend_error() override;
 
-  /*! \brief Return the stable mechanism failure class. */
+  /*!
+   * \brief Return the stable mechanism failure class.
+  *  \return The stable mechanism failure class.
+   */
   [[nodiscard]] posix_backend_error_code code() const noexcept;
-  /*! \brief Return captured errno, or zero when inapplicable. */
+  /*!
+   * \brief Return captured errno, or zero when inapplicable.
+  *  \return Captured errno, or zero when inapplicable.
+   */
   [[nodiscard]] int system_error() const noexcept;
 
 private:
@@ -103,13 +109,22 @@ public:
   /*! \brief Release all retained provider authorities. */
   ~application_posix_backend() override;
 
-  /*! \brief Return stable POSIX mutation-backend identity. */
+  /*!
+   * \brief Return stable POSIX mutation-backend identity.
+  *  \return Stable POSIX mutation-backend identity.
+   */
   [[nodiscard]] const mutation_backend_identity&
   identity() const noexcept override;
-  /*! \brief Return stable POSIX observation-backend identity. */
+  /*!
+   * \brief Return stable POSIX observation-backend identity.
+  *  \return Stable POSIX observation-backend identity.
+   */
   [[nodiscard]] const observation_backend_identity&
   observation_identity() const noexcept override;
-  /*! \brief Return exact POSIX execution capabilities. */
+  /*!
+   * \brief Return exact POSIX execution capabilities.
+  *  \return Exact POSIX execution capabilities.
+   */
   [[nodiscard]] const execution_capability_profile_identity&
   capabilities() const noexcept override;
 

@@ -49,11 +49,20 @@ public:
   /*! \brief Destroy the polymorphic durable-store failure. */
   ~journal_store_error() override;
 
-  /*! \brief Return the stable mechanism failure class. */
+  /*!
+   * \brief Return the stable mechanism failure class.
+  *  \return The stable mechanism failure class.
+   */
   [[nodiscard]] journal_store_error_code code() const noexcept;
-  /*! \brief Return captured errno, or zero when inapplicable. */
+  /*!
+   * \brief Return captured errno, or zero when inapplicable.
+  *  \return Captured errno, or zero when inapplicable.
+   */
   [[nodiscard]] int system_error() const noexcept;
-  /*! \brief Return whether the candidate replacement may already be visible. */
+  /*!
+   * \brief Return whether the candidate replacement may already be visible.
+  *  \return Whether the candidate replacement may already be visible.
+   */
   [[nodiscard]] bool replacement_visible() const noexcept;
 
 private:
@@ -85,9 +94,16 @@ public:
   application_journal_store(const application_journal_store&) = delete;
   /*! \brief Provider objects forbid copy assignment. */
   application_journal_store& operator=(const application_journal_store&) = delete;
-  /*! \brief Move one descriptor-anchored journal store. */
+  /*!
+   * \brief Move one descriptor-anchored journal store.
+  *  \param other Source object whose owned resources are transferred.
+   */
   application_journal_store(application_journal_store&& other) noexcept;
-  /*! \brief Replace this store authority by move. */
+  /*!
+   * \brief Replace this store authority by move.
+  *  \param other Source object whose owned resources are transferred.
+  *  \return Reference to this object after taking ownership from @p other.
+   */
   application_journal_store& operator=(
       application_journal_store&& other) noexcept;
   /*! \brief Close the retained journal-directory descriptor. */

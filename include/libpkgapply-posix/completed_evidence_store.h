@@ -49,11 +49,20 @@ public:
   /*! \brief Destroy the polymorphic durable-store failure. */
   ~completed_evidence_store_error() override;
 
-  /*! \brief Return the stable mechanism failure class. */
+  /*!
+   * \brief Return the stable mechanism failure class.
+  *  \return The stable mechanism failure class.
+   */
   [[nodiscard]] completed_evidence_store_error_code code() const noexcept;
-  /*! \brief Return captured errno, or zero when inapplicable. */
+  /*!
+   * \brief Return captured errno, or zero when inapplicable.
+  *  \return Captured errno, or zero when inapplicable.
+   */
   [[nodiscard]] int system_error() const noexcept;
-  /*! \brief Return whether the candidate publication may already be visible. */
+  /*!
+   * \brief Return whether the candidate publication may already be visible.
+  *  \return Whether the candidate publication may already be visible.
+   */
   [[nodiscard]] bool publication_visible() const noexcept;
 
 private:
@@ -86,10 +95,17 @@ public:
   /*! \brief Provider objects forbid copy assignment. */
   completed_application_evidence_store& operator=(
       const completed_application_evidence_store&) = delete;
-  /*! \brief Move one descriptor-anchored completed-evidence store. */
+  /*!
+   * \brief Move one descriptor-anchored completed-evidence store.
+  *  \param other Source object whose owned resources are transferred.
+   */
   completed_application_evidence_store(
       completed_application_evidence_store&& other) noexcept;
-  /*! \brief Replace this store authority by move. */
+  /*!
+   * \brief Replace this store authority by move.
+  *  \param other Source object whose owned resources are transferred.
+  *  \return Reference to this object after taking ownership from @p other.
+   */
   completed_application_evidence_store& operator=(
       completed_application_evidence_store&& other) noexcept;
   /*! \brief Close the retained evidence-directory descriptor. */

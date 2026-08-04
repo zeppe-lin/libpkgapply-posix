@@ -64,11 +64,20 @@ public:
   /*! \brief Destroy the polymorphic store failure. */
   ~rejected_store_error() override;
 
-  /*! \brief Return the stable mechanism failure class. */
+  /*!
+   * \brief Return the stable mechanism failure class.
+  *  \return The stable mechanism failure class.
+   */
   [[nodiscard]] rejected_store_error_code code() const noexcept;
-  /*! \brief Return captured errno, or zero when inapplicable. */
+  /*!
+   * \brief Return captured errno, or zero when inapplicable.
+  *  \return Captured errno, or zero when inapplicable.
+   */
   [[nodiscard]] int system_error() const noexcept;
-  /*! \brief Return the exact diagnostic path. */
+  /*!
+   * \brief Return the exact diagnostic path.
+  *  \return The exact diagnostic path.
+   */
   [[nodiscard]] const std::string& path() const noexcept;
 
 private:
@@ -90,16 +99,29 @@ public:
   rejected_regular_object(const rejected_regular_object&) = delete;
   /*! \brief Provider objects forbid copy assignment. */
   rejected_regular_object& operator=(const rejected_regular_object&) = delete;
-  /*! \brief Move one owned rejected-payload descriptor. */
+  /*!
+   * \brief Move one owned rejected-payload descriptor.
+  *  \param other Source object whose owned resources are transferred.
+   */
   rejected_regular_object(rejected_regular_object&& other) noexcept;
-  /*! \brief Replace this descriptor by move. */
+  /*!
+   * \brief Replace this descriptor by move.
+  *  \param other Source object whose owned resources are transferred.
+  *  \return Reference to this object after taking ownership from @p other.
+   */
   rejected_regular_object& operator=(rejected_regular_object&& other) noexcept;
   /*! \brief Close the retained read-only descriptor. */
   ~rejected_regular_object();
 
-  /*! \brief Return the owned read-only descriptor. */
+  /*!
+   * \brief Return the owned read-only descriptor.
+  *  \return The owned read-only descriptor.
+   */
   [[nodiscard]] int descriptor() const noexcept;
-  /*! \brief Return the verified rejected-payload byte length. */
+  /*!
+   * \brief Return the verified rejected-payload byte length.
+  *  \return The verified rejected-payload byte length.
+   */
   [[nodiscard]] std::uint64_t size() const noexcept;
 
 private:
@@ -117,25 +139,50 @@ public:
   published_rejected_object(const published_rejected_object&) = delete;
   /*! \brief Provider objects forbid copy assignment. */
   published_rejected_object& operator=(const published_rejected_object&) = delete;
-  /*! \brief Move one reopened rejected-record authority. */
+  /*!
+   * \brief Move one reopened rejected-record authority.
+  *  \param other Source object whose owned resources are transferred.
+   */
   published_rejected_object(published_rejected_object&& other) noexcept;
-  /*! \brief Replace this record authority by move. */
+  /*!
+   * \brief Replace this record authority by move.
+  *  \param other Source object whose owned resources are transferred.
+  *  \return Reference to this object after taking ownership from @p other.
+   */
   published_rejected_object& operator=(
       published_rejected_object&& other) noexcept;
   /*! \brief Release retained record and payload descriptors. */
   ~published_rejected_object();
 
-  /*! \brief Return the exact bound application attempt. */
+  /*!
+   * \brief Return the exact bound application attempt.
+  *  \return The exact bound application attempt.
+   */
   [[nodiscard]] const application_attempt& attempt() const noexcept;
-  /*! \brief Return the exact accepted operation-plan identity. */
+  /*!
+   * \brief Return the exact accepted operation-plan identity.
+  *  \return The exact accepted operation-plan identity.
+   */
   [[nodiscard]] const pkgplan::operation_plan_identity& plan() const noexcept;
-  /*! \brief Return the complete planner-derived rejected command. */
+  /*!
+   * \brief Return the complete planner-derived rejected command.
+  *  \return The complete planner-derived rejected command.
+   */
   [[nodiscard]] const backend_rejected_effect_request& request() const noexcept;
-  /*! \brief Return whether bytes came from incoming or old authority. */
+  /*!
+   * \brief Return whether bytes came from incoming or old authority.
+  *  \return Whether bytes came from incoming or old authority.
+   */
   [[nodiscard]] rejected_object_source source() const noexcept;
-  /*! \brief Return exact observation retained by the record. */
+  /*!
+   * \brief Return exact observation retained by the record.
+  *  \return Exact observation retained by the record.
+   */
   [[nodiscard]] const application_path_observation& observation() const noexcept;
-  /*! \brief Return canonical rejected-record identity. */
+  /*!
+   * \brief Return canonical rejected-record identity.
+  *  \return Canonical rejected-record identity.
+   */
   [[nodiscard]] const rejected_object_record_identity& identity() const noexcept;
 
   /*! \brief Open verified self-contained bytes for a regular rejected object.
@@ -175,10 +222,17 @@ public:
   /*! \brief Provider objects forbid copy assignment. */
   application_rejected_object_store& operator=(
       const application_rejected_object_store&) = delete;
-  /*! \brief Move one descriptor-anchored rejected-object store. */
+  /*!
+   * \brief Move one descriptor-anchored rejected-object store.
+  *  \param other Source object whose owned resources are transferred.
+   */
   application_rejected_object_store(
       application_rejected_object_store&& other) noexcept;
-  /*! \brief Replace this store authority by move. */
+  /*!
+   * \brief Replace this store authority by move.
+  *  \param other Source object whose owned resources are transferred.
+  *  \return Reference to this object after taking ownership from @p other.
+   */
   application_rejected_object_store& operator=(
       application_rejected_object_store&& other) noexcept;
   /*! \brief Close the retained store-directory descriptor. */

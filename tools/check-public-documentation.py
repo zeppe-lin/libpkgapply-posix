@@ -143,6 +143,20 @@ def main() -> int:
         "FAIL_ON_WARNINGS",
     }:
         fail("Doxyfile must treat warnings as errors")
+    if doxygen_setting(configuration, "HTML_TIMESTAMP") is not None:
+        fail("Doxyfile contains obsolete HTML_TIMESTAMP")
+
+    mainpage = doxygen_setting(configuration, "USE_MDFILE_AS_MAINPAGE")
+    if mainpage is not None:
+        mainpage_path = Path(mainpage)
+        if mainpage_path.is_absolute() or ".." in mainpage_path.parts:
+            fail(f"unsafe Doxygen main page: {mainpage}")
+        if not (root / mainpage_path).is_file():
+            fail(f"missing Doxygen main page: {mainpage}")
+        builder = root / "tools/build-html-docs.py"
+        builder_text = builder.read_text(encoding="utf-8")
+        if "inputs.append(mainpage)" not in builder_text:
+            fail("HTML builder does not retain the Doxygen main page in INPUT")
 
     print("public-documentation-contract: ok")
     return 0

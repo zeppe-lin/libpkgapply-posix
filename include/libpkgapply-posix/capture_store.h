@@ -67,11 +67,20 @@ public:
   /*! \brief Destroy the polymorphic store failure. */
   ~capture_store_error() override;
 
-  /*! \brief Return the stable mechanism failure class. */
+  /*!
+   * \brief Return the stable mechanism failure class.
+  *  \return The stable mechanism failure class.
+   */
   [[nodiscard]] capture_store_error_code code() const noexcept;
-  /*! \brief Return captured errno, or zero when inapplicable. */
+  /*!
+   * \brief Return captured errno, or zero when inapplicable.
+  *  \return Captured errno, or zero when inapplicable.
+   */
   [[nodiscard]] int system_error() const noexcept;
-  /*! \brief Return the exact diagnostic path. */
+  /*!
+   * \brief Return the exact diagnostic path.
+  *  \return The exact diagnostic path.
+   */
   [[nodiscard]] const std::string& path() const noexcept;
 
 private:
@@ -87,16 +96,29 @@ public:
   captured_regular_object(const captured_regular_object&) = delete;
   /*! \brief Provider objects forbid copy assignment. */
   captured_regular_object& operator=(const captured_regular_object&) = delete;
-  /*! \brief Move one owned captured-object descriptor. */
+  /*!
+   * \brief Move one owned captured-object descriptor.
+  *  \param other Source object whose owned resources are transferred.
+   */
   captured_regular_object(captured_regular_object&& other) noexcept;
-  /*! \brief Replace this descriptor by move. */
+  /*!
+   * \brief Replace this descriptor by move.
+  *  \param other Source object whose owned resources are transferred.
+  *  \return Reference to this object after taking ownership from @p other.
+   */
   captured_regular_object& operator=(captured_regular_object&& other) noexcept;
   /*! \brief Close the retained read-only descriptor. */
   ~captured_regular_object();
 
-  /*! \brief Return the owned read-only descriptor. */
+  /*!
+   * \brief Return the owned read-only descriptor.
+  *  \return The owned read-only descriptor.
+   */
   [[nodiscard]] int descriptor() const noexcept;
-  /*! \brief Return the verified captured byte length. */
+  /*!
+   * \brief Return the verified captured byte length.
+  *  \return The verified captured byte length.
+   */
   [[nodiscard]] std::uint64_t size() const noexcept;
 
 private:
@@ -114,20 +136,39 @@ public:
   captured_old_object(const captured_old_object&) = delete;
   /*! \brief Provider objects forbid copy assignment. */
   captured_old_object& operator=(const captured_old_object&) = delete;
-  /*! \brief Move one reopened capture authority. */
+  /*!
+   * \brief Move one reopened capture authority.
+  *  \param other Source object whose owned resources are transferred.
+   */
   captured_old_object(captured_old_object&& other) noexcept;
-  /*! \brief Replace this capture authority by move. */
+  /*!
+   * \brief Replace this capture authority by move.
+  *  \param other Source object whose owned resources are transferred.
+  *  \return Reference to this object after taking ownership from @p other.
+   */
   captured_old_object& operator=(captured_old_object&& other) noexcept;
   /*! \brief Release retained record and payload descriptors. */
   ~captured_old_object();
 
-  /*! \brief Return the exact bound application attempt. */
+  /*!
+   * \brief Return the exact bound application attempt.
+  *  \return The exact bound application attempt.
+   */
   [[nodiscard]] const application_attempt& attempt() const noexcept;
-  /*! \brief Return the exact semantic capture request. */
+  /*!
+   * \brief Return the exact semantic capture request.
+  *  \return The exact semantic capture request.
+   */
   [[nodiscard]] const old_object_capture_request& request() const noexcept;
-  /*! \brief Return the admitted observation retained by capture. */
+  /*!
+   * \brief Return the admitted observation retained by capture.
+  *  \return The admitted observation retained by capture.
+   */
   [[nodiscard]] const application_path_observation& observation() const noexcept;
-  /*! \brief Return whether exact prior-state recovery is possible. */
+  /*!
+   * \brief Return whether exact prior-state recovery is possible.
+  *  \return Whether exact prior-state recovery is possible.
+   */
   [[nodiscard]] bool exact_recovery_possible() const noexcept;
 
   /*! \brief Open verified captured bytes for a regular object.
@@ -170,9 +211,16 @@ public:
   application_capture_store(const application_capture_store&) = delete;
   /*! \brief Provider objects forbid copy assignment. */
   application_capture_store& operator=(const application_capture_store&) = delete;
-  /*! \brief Move one descriptor-anchored capture store. */
+  /*!
+   * \brief Move one descriptor-anchored capture store.
+  *  \param other Source object whose owned resources are transferred.
+   */
   application_capture_store(application_capture_store&& other) noexcept;
-  /*! \brief Replace this store authority by move. */
+  /*!
+   * \brief Replace this store authority by move.
+  *  \param other Source object whose owned resources are transferred.
+  *  \return Reference to this object after taking ownership from @p other.
+   */
   application_capture_store& operator=(
       application_capture_store&& other) noexcept;
   /*! \brief Close retained store and target-root descriptors. */

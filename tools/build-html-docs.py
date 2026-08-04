@@ -163,14 +163,47 @@ def render_markdown(
             ])
 
 
-def render_doxygen(doxygen: str, source_root: Path, output_root: Path, version: str) -> None:
+def doxygen_setting(configuration: str, name: str) -> str | None:
+    match = re.search(
+        rf"^\s*{re.escape(name)}\s*=\s*(\S+)\s*$",
+        configuration,
+        re.MULTILINE,
+    )
+    return match.group(1) if match else None
+
+
+def doxygen_path(path: Path) -> str:
+    return '"' + str(path).replace('\\', '\\\\').replace('"', '\\"') + '"'
+
+
+def compose_doxygen_configuration(
+    source_root: Path, output_root: Path, version: str
+) -> str:
     base = source_root / "Doxyfile"
     if not base.is_file():
         fail("missing Doxyfile")
-    configuration = base.read_text(encoding="utf-8") + "\n" + "\n".join([
+    configuration = base.read_text(encoding="utf-8")
+
+    inputs = [(source_root / "include").resolve()]
+    mainpage_value = doxygen_setting(configuration, "USE_MDFILE_AS_MAINPAGE")
+    if mainpage_value is not None:
+        mainpage_relative = Path(mainpage_value)
+        if mainpage_relative.is_absolute() or ".." in mainpage_relative.parts:
+            fail(f"Doxygen main page is not a contained relative path: {mainpage_value}")
+        mainpage = (source_root / mainpage_relative).resolve()
+        try:
+            mainpage.relative_to(source_root.resolve())
+        except ValueError:
+            fail(f"Doxygen main page escapes source root: {mainpage_value}")
+        if not mainpage.is_file():
+            fail(f"Doxygen main page is missing: {mainpage_value}")
+        inputs.append(mainpage)
+
+    input_value = " ".join(doxygen_path(path) for path in inputs)
+    return configuration + "\n" + "\n".join([
         f"PROJECT_NUMBER = {version}",
         f"OUTPUT_DIRECTORY = {output_root}",
-        f"INPUT = {source_root / 'include'}",
+        f"INPUT = {input_value}",
         "FULL_PATH_NAMES = NO",
         f"STRIP_FROM_PATH = {source_root}",
         "GENERATE_HTML = YES",
@@ -178,6 +211,10 @@ def render_doxygen(doxygen: str, source_root: Path, output_root: Path, version: 
         "GENERATE_LATEX = NO",
         f"HTML_EXTRA_STYLESHEET = {source_root / 'docs/assets/doxygen-extra.css'}",
     ]) + "\n"
+
+
+def render_doxygen(doxygen: str, source_root: Path, output_root: Path, version: str) -> None:
+    configuration = compose_doxygen_configuration(source_root, output_root, version)
     run([doxygen, "-"], cwd=source_root, stdin=configuration)
     if not (output_root / "api/index.html").is_file():
         fail("Doxygen did not produce api/index.html")

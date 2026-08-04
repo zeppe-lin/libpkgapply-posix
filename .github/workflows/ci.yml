@@ -1,46 +1,104 @@
+# SPDX-FileCopyrightText: 2026 Alexandr Savca
+# SPDX-License-Identifier: GPL-3.0-or-later
 name: ci
-on: [push, pull_request, workflow_dispatch]
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
 permissions:
   contents: read
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
 jobs:
   build:
+    name: ${{ matrix.name }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         include:
-          - {name: GCC shared, cc: gcc, cxx: g++, mode: shared, man: enabled}
-          - {name: GCC static, cc: gcc, cxx: g++, mode: static, man: disabled}
-          - {name: Clang shared, cc: clang, cxx: clang++, mode: shared, man: disabled}
-          - {name: Clang static, cc: clang, cxx: clang++, mode: static, man: disabled}
-    name: ${{ matrix.name }}
-    env: {CC: '${{ matrix.cc }}', CXX: '${{ matrix.cxx }}'}
+          - name: GCC shared
+            cc: gcc
+            cxx: g++
+            mode: shared
+            buildtype: debug
+            man_pages: enabled
+          - name: GCC static
+            cc: gcc
+            cxx: g++
+            mode: static
+            buildtype: debug
+            man_pages: disabled
+          - name: Clang shared
+            cc: clang
+            cxx: clang++
+            mode: shared
+            buildtype: debug
+            man_pages: disabled
+          - name: Clang static
+            cc: clang
+            cxx: clang++
+            mode: static
+            buildtype: debug
+            man_pages: disabled
+          - name: GCC release
+            cc: gcc
+            cxx: g++
+            mode: shared
+            buildtype: release
+            man_pages: disabled
+    env:
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
     steps:
+      - name: Check out libpkgapply-posix
+        uses: actions/checkout@v4
       - uses: actions/checkout@v4
+        with:
+          repository: zeppe-lin/libpkgimage
+          ref: v0.4.0
+          path: dependencies/libpkgimage
       - uses: actions/checkout@v4
-        with: {repository: zeppe-lin/libpkgimage, ref: v0.4.0, path: dependencies/libpkgimage}
+        with:
+          repository: zeppe-lin/libpkgplan
+          ref: v0.3.0
+          path: dependencies/libpkgplan
       - uses: actions/checkout@v4
-        with: {repository: zeppe-lin/libpkgplan, ref: v0.3.0, path: dependencies/libpkgplan}
+        with:
+          repository: zeppe-lin/libpkgsource
+          ref: v3.0.0
+          path: dependencies/libpkgsource
       - uses: actions/checkout@v4
-        with: {repository: zeppe-lin/libpkgsource, ref: v3.0.0, path: dependencies/libpkgsource}
+        with:
+          repository: zeppe-lin/libpkgsource-plan
+          ref: v1.0.0
+          path: dependencies/libpkgsource-plan
       - uses: actions/checkout@v4
-        with: {repository: zeppe-lin/libpkgsource-plan, ref: v1.0.0, path: dependencies/libpkgsource-plan}
+        with:
+          repository: zeppe-lin/libpkgbuild
+          ref: v2.0.0
+          path: dependencies/libpkgbuild
       - uses: actions/checkout@v4
-        with: {repository: zeppe-lin/libpkgbuild, ref: v2.0.0, path: dependencies/libpkgbuild}
-      - uses: actions/checkout@v4
-        with: {repository: zeppe-lin/libpkgapply, ref: v3.0.0, path: dependencies/libpkgapply}
-      - name: Install tools
+        with:
+          repository: zeppe-lin/libpkgapply
+          ref: v3.0.0
+          path: dependencies/libpkgapply
+      - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends clang clang-format-17 binutils libarchive-dev libssl-dev mandoc ninja-build pkg-config python3-venv scdoc
+          sudo apt-get install --yes --no-install-recommends \
+            binutils clang doxygen libarchive-dev libssl-dev mandoc \
+            ninja-build pkg-config python3-venv scdoc
           python3 -m venv "$RUNNER_TEMP/meson"
           "$RUNNER_TEMP/meson/bin/pip" install 'meson==1.10.2'
           echo "$RUNNER_TEMP/meson/bin" >> "$GITHUB_PATH"
-      - name: Build and test
+      - name: Configure, build, and test
         env:
           LIBPKGIMAGE_SOURCE: dependencies/libpkgimage
           LIBPKGPLAN_SOURCE: dependencies/libpkgplan
@@ -48,9 +106,90 @@ jobs:
           LIBPKGSOURCE_PLAN_SOURCE: dependencies/libpkgsource-plan
           LIBPKGBUILD_SOURCE: dependencies/libpkgbuild
           LIBPKGAPPLY_SOURCE: dependencies/libpkgapply
-        run: ci/configure-and-test.sh build '${{ matrix.mode }}' -Dman_pages='${{ matrix.man }}'
-      - name: Qualify install
-        run: ci/qualify-installed.sh build '${{ matrix.mode }}'
-      - name: Lint manual
-        if: matrix.man == 'enabled'
-        run: find build/product/man -type f -name '*.3' -exec mandoc -Tlint {} +
+        run: |
+          ./ci/configure-and-test.sh build "${{ matrix.mode }}" \
+            --buildtype="${{ matrix.buildtype }}" \
+            -Dman_pages="${{ matrix.man_pages }}"
+      - name: Qualify public API documentation
+        if: matrix.name == 'GCC shared'
+        run: doxygen Doxyfile
+      - name: Qualify manuals
+        if: matrix.man_pages == 'enabled'
+        run: ./ci/lint-manpages.sh build
+      - name: Qualify installed product
+        run: ./ci/qualify-installed.sh build "${{ matrix.mode }}"
+
+  sanitizers:
+    name: ${{ matrix.name }} address,undefined
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: GCC
+            cc: gcc
+            cxx: g++
+          - name: Clang
+            cc: clang
+            cxx: clang++
+    env:
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
+      ASAN_OPTIONS: halt_on_error=1:abort_on_error=1:detect_leaks=1
+      UBSAN_OPTIONS: halt_on_error=1:abort_on_error=1:print_stacktrace=1
+    steps:
+      - name: Check out libpkgapply-posix
+        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: zeppe-lin/libpkgimage
+          ref: v0.4.0
+          path: dependencies/libpkgimage
+      - uses: actions/checkout@v4
+        with:
+          repository: zeppe-lin/libpkgplan
+          ref: v0.3.0
+          path: dependencies/libpkgplan
+      - uses: actions/checkout@v4
+        with:
+          repository: zeppe-lin/libpkgsource
+          ref: v3.0.0
+          path: dependencies/libpkgsource
+      - uses: actions/checkout@v4
+        with:
+          repository: zeppe-lin/libpkgsource-plan
+          ref: v1.0.0
+          path: dependencies/libpkgsource-plan
+      - uses: actions/checkout@v4
+        with:
+          repository: zeppe-lin/libpkgbuild
+          ref: v2.0.0
+          path: dependencies/libpkgbuild
+      - uses: actions/checkout@v4
+        with:
+          repository: zeppe-lin/libpkgapply
+          ref: v3.0.0
+          path: dependencies/libpkgapply
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            clang libarchive-dev libssl-dev ninja-build pkg-config python3-venv
+          python3 -m venv "$RUNNER_TEMP/meson"
+          "$RUNNER_TEMP/meson/bin/pip" install 'meson==1.10.2'
+          echo "$RUNNER_TEMP/meson/bin" >> "$GITHUB_PATH"
+      - name: Configure, build, and test
+        env:
+          LIBPKGIMAGE_SOURCE: dependencies/libpkgimage
+          LIBPKGPLAN_SOURCE: dependencies/libpkgplan
+          LIBPKGSOURCE_SOURCE: dependencies/libpkgsource
+          LIBPKGSOURCE_PLAN_SOURCE: dependencies/libpkgsource-plan
+          LIBPKGBUILD_SOURCE: dependencies/libpkgbuild
+          LIBPKGAPPLY_SOURCE: dependencies/libpkgapply
+        run: |
+          ./ci/configure-and-test.sh build-sanitize shared \
+            --buildtype=debug \
+            -Dman_pages=disabled \
+            -Db_sanitize=address,undefined \
+            -Db_lundef=false

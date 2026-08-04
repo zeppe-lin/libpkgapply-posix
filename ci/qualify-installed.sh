@@ -61,6 +61,23 @@ printf '%s\n' "$private" | grep -F libcrypto >/dev/null || {
 
 flags=
 [ "$mode" = static ] && flags=--static
+consumer_flags=$(pkg-config $flags --cflags --libs libpkgapply-posix)
+case $mode in
+  shared)
+    if printf '%s\n' "$consumer_flags" | grep -E -- '-lpkgplan|-lcrypto' >/dev/null; then
+      echo 'private planner or crypto edge leaked into shared consumer flags' >&2
+      exit 1
+    fi
+    ;;
+  static)
+    for required in -lpkgplan -lcrypto; do
+      printf '%s\n' "$consumer_flags" | grep -F -- "$required" >/dev/null || {
+        echo "static link closure omits $required" >&2
+        exit 1
+      }
+    done
+    ;;
+esac
 cxx=${CXX:-c++}
 
 # shellcheck disable=SC2046
@@ -87,26 +104,31 @@ if [ "$mode" = shared ]; then
     echo 'installed shared library not found' >&2
     exit 1
   }
-  readelf -d "$library" | grep -F \
-    'Library soname: [libpkgapply-posix.so.2]' >/dev/null
-  readelf -d "$library" | grep -F \
-    'Shared library: [libpkgapply.so.2]' >/dev/null
-  readelf -d "$library" | grep -F \
-    'Shared library: [libpkgimage.so.1]' >/dev/null
-  readelf -d "$library" | grep -F \
-    'Shared library: [libpkgplan.so.1]' >/dev/null
-
-  nm -D --defined-only "$library" | c++filt >"$build/exports.txt"
-  if grep -E ' [TWV] ' "$build/exports.txt" | grep -vE \
-    'pkgapply::posix::|typeinfo (for|name for) pkgapply::posix::|vtable for pkgapply::posix::|LIBPKGAPPLY_POSIX_2| _init$| _fini$' \
-    >/dev/null
-  then
-    echo 'foreign C++ export present' >&2
-    exit 1
-  fi
+  "$(dirname "$0")/audit-shared-boundary.sh" "$library"
 else
   [ -f "$prefix/lib/libpkgapply-posix.a" ] || {
     echo 'installed static archive not found' >&2
+    exit 1
+  }
+fi
+
+for document in \
+  README.md HISTORY.md CONTRIBUTING.md MAINTAINING.md architecture.md \
+  integration.md testing.md abi.md code-style.md mechanisms.md \
+  qualification.md libpkgapply-2.3-extraction.md
+do
+  installed=$prefix/share/doc/libpkgapply-posix/$document
+  [ -s "$installed" ] || {
+    echo "installed documentation is absent: $document" >&2
+    exit 1
+  }
+done
+
+page=$build/product/man/libpkgapply-posix.3
+if [ -e "$page" ]; then
+  installed=$prefix/share/man/man3/libpkgapply-posix.3
+  [ -s "$installed" ] || {
+    echo "installed manual is absent: $installed" >&2
     exit 1
   }
 fi

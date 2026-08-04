@@ -18,3 +18,6 @@
 - Published complete incoming-payload, old-object capture, and rejected-object
   store contracts, including private namespace, byte verification, and durability
   refusal semantics.
+- Published complete durable-journal, restart-checkpoint, completed-evidence,
+  umbrella, and version contracts, including atomic visibility and exact
+  republication semantics.

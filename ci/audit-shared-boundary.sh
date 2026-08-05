@@ -40,6 +40,10 @@ then
 fi
 
 nm -D --defined-only "$library" | c++filt >"$library.exports"
+if grep -F 'pkgapply::posix::detail::' "$library.exports" >/dev/null; then
+  echo 'shared-boundary-audit: private detail symbol is exported' >&2
+  exit 1
+fi
 if grep -E ' [TWV] ' "$library.exports" | grep -vE \
   'pkgapply::posix::|typeinfo (for|name for) pkgapply::posix::|vtable for pkgapply::posix::|LIBPKGAPPLY_POSIX_2| _init$| _fini$' \
   >/dev/null

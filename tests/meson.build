@@ -16,6 +16,27 @@ if get_option('tests').allowed()
   crypto_test_deps = [libpkgapply_posix_dep, libcrypto_dep]
   fixture_crypto_test_deps = fixture_test_deps + [libcrypto_dep]
 
+  # White-box mechanism tests include non-installed headers from src/.  They
+  # must exercise the private implementation without promoting detail symbols
+  # into the installed shared ABI.
+  libpkgapply_posix_internal_test_library = static_library(
+    'pkgapply-posix-test-implementation',
+    libpkgapply_posix_sources,
+    include_directories: [public_inc, private_inc],
+    cpp_args: visibility_cpp_args + ['-DPKGAPPLY_POSIX_BUILDING_LIBRARY'],
+    dependencies: libpkgapply_posix_implementation_deps,
+    install: false,
+  )
+  libpkgapply_posix_internal_test_dep = declare_dependency(
+    link_with: libpkgapply_posix_internal_test_library,
+    include_directories: [public_inc, private_inc],
+    dependencies: libpkgapply_posix_implementation_deps,
+  )
+  internal_crypto_test_deps = [
+    libpkgapply_posix_internal_test_dep,
+    libcrypto_dep,
+  ]
+
   version_header_test = executable(
     'version-header-test',
     'version_header_test.cpp',
@@ -27,32 +48,28 @@ if get_option('tests').allowed()
   posix_active_incoming_test = executable(
     'posix-active-incoming-test',
     'posix_active_incoming_test.cpp',
-    include_directories: include_directories('../src'),
-    dependencies: crypto_test_deps,
+    dependencies: internal_crypto_test_deps,
   )
   test('posix-active-incoming-test', posix_active_incoming_test)
 
   posix_active_recovery_test = executable(
     'posix-active-recovery-test',
     'posix_active_recovery_test.cpp',
-    include_directories: include_directories('../src'),
-    dependencies: crypto_test_deps,
+    dependencies: internal_crypto_test_deps,
   )
   test('posix-active-recovery-test', posix_active_recovery_test)
 
   posix_active_removal_test = executable(
     'posix-active-removal-test',
     'posix_active_removal_test.cpp',
-    include_directories: include_directories('../src'),
-    dependencies: libpkgapply_posix_dep,
+    dependencies: libpkgapply_posix_internal_test_dep,
   )
   test('posix-active-removal-test', posix_active_removal_test)
 
   posix_active_workspace_test = executable(
     'posix-active-workspace-test',
     'posix_active_workspace_test.cpp',
-    include_directories: include_directories('../src'),
-    dependencies: libpkgapply_posix_dep,
+    dependencies: libpkgapply_posix_internal_test_dep,
   )
   test('posix-active-workspace-test', posix_active_workspace_test)
 
@@ -276,6 +293,14 @@ if get_option('tests').allowed()
       join_paths(meson.current_source_dir(), 'contracts/check_style_contract.sh'),
       meson.project_source_root(),
       meson.project_build_root(),
+    ],
+  )
+  test(
+    'contract test-topology-contract',
+    sh,
+    args: [
+      join_paths(meson.current_source_dir(), 'contracts/check_test_topology_contract.sh'),
+      meson.project_source_root(),
     ],
   )
 

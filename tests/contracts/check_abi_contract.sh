@@ -40,6 +40,9 @@ grep -F 'posix-rtti-link-test' "$root/tests/meson.build" >/dev/null ||
 if grep -Ev '^_Z[A-Za-z0-9_]+$' "$manifest" >/dev/null; then
   fail 'ABI manifest contains a wildcard or invalid symbol'
 fi
+if grep -F 'pkgapply5posix6detail' "$manifest" >/dev/null; then
+  fail 'private detail namespace is present in the installed ABI manifest'
+fi
 
 for symbol in \
   _ZN8pkgapply5posix27application_target_observer4openERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE \

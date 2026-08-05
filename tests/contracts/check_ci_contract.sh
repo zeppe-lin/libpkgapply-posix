@@ -21,7 +21,8 @@ for file in \
   ci/qualify-installed.sh \
   ci/audit-shared-boundary.sh \
   ci/lint-manpages.sh \
-  ci/installed-consumer.cpp
+  ci/installed-consumer.cpp \
+  tests/contracts/check_test_topology_contract.sh
 do
   [ -s "$root/$file" ] || fail "missing $file"
 done

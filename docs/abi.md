@@ -5,18 +5,18 @@ belongs to the already-published in-tree POSIX ABI generation; repository
 extraction does not manufacture an ABI break.
 
 Public classes carry `PKGAPPLY_POSIX_API`. Compilation is hidden by default and
-an ELF version script permits only the `pkgapply::posix` mangling domain. This
-prevents active-namespace helpers, workspace helpers, OpenSSL internals, and
-standard-library implementation bodies from becoming accidental ABI.
+an exact reviewed ELF manifest is converted into the linker version script.
+The manifest contains the installed callable surface and the required public
+RTTI, type-name, and vtable anchors. It excludes the private
+`pkgapply::posix::detail` namespace, OpenSSL internals, and standard-library
+implementation bodies.
 
-The namespace manifest is intentionally broader than a per-symbol freeze until
-a native build of the extracted repository can produce and review its exact
-symbol inventory. Before the first independent tag, maintainers must capture
-that inventory from both GCC and Clang shared builds and either narrow the map
-or record the accepted set in this document. No symbol list has been invented
-without a linkable dependency closure. Public exception vtables and RTTI are
-already anchored by out-of-line owner destructors rather than emitted weakly by
-consumers.
+White-box active-namespace and workspace tests include non-installed headers.
+They link a private, non-installed static test library built from the same
+production source list. They do not consume the installed shared object and do
+not justify exporting implementation symbols. Public-consumer tests and the
+installed consumer link only through `libpkgapply-posix` and its pkg-config
+metadata.
 
 Public headers expose `libpkgapply` and `libpkgimage` value types directly;
 those dependencies belong in pkg-config `Requires`. Direct `libpkgplan` use is

@@ -40,6 +40,10 @@ for stem in $rtti_stems; do
     fail "RTTI vtable symbol is missing for $stem"
 done
 
+if printf '%s\n' "$raw" | grep -F 'pkgapply5posix6detail' >/dev/null; then
+  fail 'private detail namespace is exported'
+fi
+
 if printf '%s\n' "$raw" | grep -E 'LIBPKGAPPLY_POSIX_' >/dev/null; then
   fail 'premature named ABI version node remains'
 fi

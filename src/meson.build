@@ -16,33 +16,37 @@ export_script = configure_file(
   capture: true,
 )
 
+libpkgapply_posix_sources = files(
+  'version.cpp',
+  'backend.cpp',
+  'active_namespace.cpp',
+  'active_workspace.cpp',
+  'capture_store.cpp',
+  'completed_evidence_store.cpp',
+  'checkpoint_store.cpp',
+  'journal_store.cpp',
+  'mutation_lease.cpp',
+  'payload_stage.cpp',
+  'rejected_store.cpp',
+  'target_observer.cpp',
+)
+
+libpkgapply_posix_implementation_deps = [
+  libpkgapply_dep,
+  libpkgimage_dep,
+  libpkgplan_dep,
+  libcrypto_dep,
+]
+
 libpkgapply_posix = library(
   'pkgapply-posix',
-  [
-    'version.cpp',
-    'backend.cpp',
-    'active_namespace.cpp',
-    'active_workspace.cpp',
-    'capture_store.cpp',
-    'completed_evidence_store.cpp',
-    'checkpoint_store.cpp',
-    'journal_store.cpp',
-    'mutation_lease.cpp',
-    'payload_stage.cpp',
-    'rejected_store.cpp',
-    'target_observer.cpp',
-  ],
+  libpkgapply_posix_sources,
   include_directories: [public_inc, private_inc],
   cpp_args: visibility_cpp_args + ['-DPKGAPPLY_POSIX_BUILDING_LIBRARY'],
   gnu_symbol_visibility: 'hidden',
   link_args: ['-Wl,--version-script=' + export_script_path],
   link_depends: [export_script],
-  dependencies: [
-    libpkgapply_dep,
-    libpkgimage_dep,
-    libpkgplan_dep,
-    libcrypto_dep,
-  ],
+  dependencies: libpkgapply_posix_implementation_deps,
   install: true,
   version: meson.project_version(),
   soversion: '2',

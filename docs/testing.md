@@ -5,6 +5,9 @@ Qualification covers five layers.
 1. Every installed header compiles independently and through the umbrella.
 2. Mechanism tests exercise descriptor anchoring, refusal categories,
    immutable publication, exact replay, synchronization, and crash seams.
+   Tests of the non-installed active-namespace and workspace implementation
+   link a private static test target built from the production source list;
+   they never require private symbols from the installed shared library.
 3. Source contracts prove repository separation, extraction provenance,
    dependency placement, export annotations, documentation, and release
    metadata.

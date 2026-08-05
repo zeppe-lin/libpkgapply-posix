@@ -35,7 +35,7 @@ libpkgapply_posix = library(
   include_directories: [public_inc, private_inc],
   cpp_args: visibility_cpp_args + ['-DPKGAPPLY_POSIX_BUILDING_LIBRARY'],
   gnu_symbol_visibility: 'hidden',
-  link_args: ['-Wl,--version-script=' + elf_export_script_path],
+  link_args: ['-Wl,--version-script=' + export_script_path],
   link_depends: [export_script],
   dependencies: [
     libpkgapply_dep,

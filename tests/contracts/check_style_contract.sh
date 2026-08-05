@@ -2,6 +2,7 @@
 set -eu
 
 root=$1
+build_root=$2
 fail() {
   echo "style-contract: $*" >&2
   exit 1
@@ -13,7 +14,7 @@ done
 
 text_files() {
   find "$root" \
-    -path "$root/.git" -prune -o \
+    -path "$root/.git" -prune -o -path "$build_root" -prune -o \
     -type f \( \
       -name '*.cpp' -o \
       -name '*.h' -o \

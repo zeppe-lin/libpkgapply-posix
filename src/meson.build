@@ -4,7 +4,17 @@
 public_inc = include_directories('../include')
 private_inc = include_directories('.')
 
-elf_export_script_path = meson.project_source_root() / 'abi/libpkgapply-posix.exports'
+elf_export_generator = find_program(
+  meson.project_source_root() / 'tools/generate-elf-export-script.sh',
+)
+export_script_name = 'libpkgapply-posix.exports.map'
+export_script_path = meson.current_build_dir() / export_script_name
+export_script = configure_file(
+  input: '../abi/libpkgapply-posix.exports',
+  output: export_script_name,
+  command: [elf_export_generator, '@INPUT@'],
+  capture: true,
+)
 
 libpkgapply_posix = library(
   'pkgapply-posix',
@@ -26,7 +36,7 @@ libpkgapply_posix = library(
   cpp_args: visibility_cpp_args + ['-DPKGAPPLY_POSIX_BUILDING_LIBRARY'],
   gnu_symbol_visibility: 'hidden',
   link_args: ['-Wl,--version-script=' + elf_export_script_path],
-  link_depends: files('../abi/libpkgapply-posix.exports'),
+  link_depends: [export_script],
   dependencies: [
     libpkgapply_dep,
     libpkgimage_dep,

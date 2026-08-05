@@ -26,9 +26,13 @@ if grep -F 'fallback:' "$root/meson.build" >/dev/null; then
   fail 'repository fallback coupling present'
 fi
 
-grep -F 'requires: [libpkgapply_dep, libpkgimage_dep]' \
-  "$root/src/meson.build" >/dev/null || \
-  fail 'public header closure is not explicit'
-grep -F 'requires_private: [libpkgplan_dep, libcrypto_dep]' \
-  "$root/src/meson.build" >/dev/null || \
-  fail 'private mechanism closure is not explicit'
+grep -F 'libpkgapply_posix_consumer_deps = [' "$root/src/meson.build" >/dev/null || \
+  fail 'public consumer closure is not explicit'
+grep -F 'libpkgapply_dep,' "$root/src/meson.build" >/dev/null || \
+  fail 'public apply dependency is absent'
+grep -F 'libpkgimage_dep,' "$root/src/meson.build" >/dev/null || \
+  fail 'public image dependency is absent'
+grep -F "'libpkgplan >= 0.3.0'" "$root/src/meson.build" >/dev/null || \
+  fail 'private planner closure is not explicit'
+grep -F 'libcrypto_dep' "$root/src/meson.build" >/dev/null || \
+  fail 'private crypto closure is not explicit'

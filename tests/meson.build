@@ -4,6 +4,15 @@
 if get_option('tests').allowed()
   sh = find_program('sh')
 
+  fixture_test_deps = [
+    libpkgapply_posix_dep,
+    dependency('libpkgbuild-image', version: ['>=1.0.0', '<2.0.0'], required: true, static: want_static),
+    dependency('libpkgbuild-plan', version: ['>=1.0.0', '<2.0.0'], required: true, static: want_static),
+    dependency('libpkgcatalog', version: ['>=3.0.0', '<4.0.0'], required: true, static: want_static),
+    dependency('libpkgresolve', version: ['>=2.0.0', '<3.0.0'], required: true, static: want_static),
+    dependency('libpkgstate', version: ['>=3.0.0', '<4.0.0'], required: true, static: want_static),
+  ]
+
   version_header_test = executable(
     'version-header-test',
     'version_header_test.cpp',
@@ -54,14 +63,14 @@ if get_option('tests').allowed()
   posix_backend_routes_test = executable(
     'posix-backend-routes-test',
     'posix_backend_routes_test.cpp',
-    dependencies: libpkgapply_posix_dep,
+    dependencies: fixture_test_deps,
   )
   test('posix-backend-routes-test', posix_backend_routes_test)
 
   posix_backend_test = executable(
     'posix-backend-test',
     'posix_backend_test.cpp',
-    dependencies: libpkgapply_posix_dep,
+    dependencies: fixture_test_deps,
   )
   test('posix-backend-test', posix_backend_test)
 
@@ -89,7 +98,7 @@ if get_option('tests').allowed()
   posix_checkpoint_store_test = executable(
     'posix-checkpoint-store-test',
     'posix_checkpoint_store_test.cpp',
-    dependencies: libpkgapply_posix_dep,
+    dependencies: fixture_test_deps,
   )
   test('posix-checkpoint-store-test', posix_checkpoint_store_test)
 
@@ -103,7 +112,7 @@ if get_option('tests').allowed()
   posix_completed_evidence_store_test = executable(
     'posix-completed-evidence-store-test',
     'posix_completed_evidence_store_test.cpp',
-    dependencies: libpkgapply_posix_dep,
+    dependencies: fixture_test_deps,
   )
   test('posix-completed-evidence-store-test', posix_completed_evidence_store_test)
 
@@ -166,7 +175,7 @@ if get_option('tests').allowed()
   posix_rejected_store_test = executable(
     'posix-rejected-store-test',
     'posix_rejected_store_test.cpp',
-    dependencies: libpkgapply_posix_dep,
+    dependencies: fixture_test_deps,
   )
   test('posix-rejected-store-test', posix_rejected_store_test)
 

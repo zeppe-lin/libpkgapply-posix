@@ -14,7 +14,12 @@
 #include <libpkgapply/backend.h>
 #include <libpkgapply/incoming_package.h>
 #include <libpkgbuild/libpkgbuild.h>
+#include <libpkgbuild-image/libpkgbuild-image.h>
+#include <libpkgbuild-plan/libpkgbuild-plan.h>
+#include <libpkgcatalog/libpkgcatalog.h>
+#include <libpkgresolve/libpkgresolve.h>
 #include <libpkgsource-plan/adapter.h>
+#include <libpkgstate/libpkgstate.h>
 #include <libpkgplan/install.h>
 #include <libpkgplan/remove.h>
 #include <libpkgplan/upgrade.h>
@@ -196,6 +201,92 @@ source_snapshot(std::string version)
       profile_catalog::seal({}));
 }
 
+
+[[nodiscard]] inline pkgsource::source_snapshot
+dependency_snapshot(const char* name)
+{
+  using namespace pkgsource;
+  return seal_source(
+      source_origin(std::string(name) + "/recipe.yml"),
+      recipe_declaration(
+          package_release(package_reference(name), "1.0", 1),
+          package_metadata(name, std::nullopt, std::nullopt,
+                           {"GPL-3.0-or-later"}),
+          {},
+          program(program_language::posix_shell, "install -d \"$PKG\"\n"),
+          {}, {},
+          architecture_requirements(
+              {architecture_reference("x86_64")},
+              {architecture_reference("x86_64")}),
+          declaration_provenance("recipe.yml", "$", 1, 1)),
+      profile_catalog::seal({}));
+}
+
+[[nodiscard]] inline pkgstate::snapshot
+empty_state()
+{
+  const auto state_identity = [](std::uint8_t seed) {
+    pkgstate::sha256_digest_bytes bytes{};
+    for (std::size_t index = 0; index < bytes.size(); ++index)
+      bytes[index] = static_cast<std::uint8_t>(seed + index);
+    return bytes;
+  };
+  return pkgstate::snapshot::make(pkgstate::state_target_binding::make(
+      pkgstate::managed_target_identity::from_sha256(state_identity(1)),
+      pkgstate::state_store_identity::from_sha256(state_identity(2)),
+      pkgstate::root_view_identity::from_sha256(state_identity(3)),
+      pkgstate::state_backend_identity::from_sha256(state_identity(4)),
+      pkgstate::publication_domain_identity::from_sha256(state_identity(5))));
+}
+
+[[nodiscard]] inline pkgresolve::resolution_result
+resolution(std::string version)
+{
+  auto profiles = pkgsource::profile_catalog::seal({});
+  std::vector<pkgsource::source_snapshot> sources;
+  sources.push_back(source_snapshot(std::move(version)));
+  sources.push_back(dependency_snapshot("libc"));
+  pkgcatalog::collection_declaration declaration(
+      pkgcatalog::collection_reference("core"),
+      pkgcatalog::collection_provenance(
+          "/collections/core", std::nullopt,
+          pkgsource::declaration_provenance(
+              "catalog.yml", "collections[0]", 1, 1)),
+      std::move(sources));
+  std::vector<pkgcatalog::catalog_collection> collections;
+  collections.emplace_back(
+      0, pkgcatalog::seal_collection(std::move(declaration)));
+  auto catalog = pkgcatalog::catalog_snapshot::seal(
+      std::move(profiles), std::move(collections));
+
+  std::vector<pkgresolve::resolution_goal> goals;
+  goals.emplace_back(
+      pkgsource::requirement_scope::build(),
+      pkgsource::requirement_subject(pkgsource::package_reference("tool")),
+      "build-tool");
+  goals.emplace_back(
+      pkgsource::requirement_scope::check(),
+      pkgsource::requirement_subject(pkgsource::package_reference("tool")),
+      "check-tool");
+  return pkgresolve::resolve(pkgresolve::resolution_request::seal(
+      std::move(catalog), empty_state(),
+      pkgresolve::architecture_context(
+          pkgsource::architecture_reference("x86_64"),
+          pkgsource::architecture_reference("x86_64")),
+      std::move(goals), pkgresolve::resolution_policy()));
+}
+
+[[nodiscard]] inline const pkgresolve::selected_package&
+subject(const pkgresolve::resolution_result& resolution)
+{
+  for (const auto& selection : resolution.selections()) {
+    if (selection.environment() == pkgresolve::resolution_environment::target &&
+        selection.package().name() == "tool")
+      return selection;
+  }
+  throw std::runtime_error("fixture resolution lacks tool subject");
+}
+
 [[nodiscard]] inline std::string
 sha256_hex(const std::string& value)
 {
@@ -266,10 +357,9 @@ build_payload(const std::vector<pkgimage::package_entry>& entries)
 [[nodiscard]] inline pkgbuild::build_request
 build_request(std::string version)
 {
-  auto source = source_snapshot(std::move(version));
+  auto resolved = resolution(std::move(version));
   return pkgbuild::build_request::seal(
-      source, {}, {}, pkgsource::architecture_reference("x86_64"),
-      pkgsource::architecture_reference("x86_64"),
+      resolved, subject(resolved).identity(),
       pkgbuild::build_policy::make(
           pkgbuild::environment_policy::hermetic(1, 0022, 1700000000)));
 }
@@ -284,13 +374,15 @@ incoming_package(
   auto build = pkgbuild::build_result::succeeded(
       build_request(std::move(version)), build_payload(entries),
       pkgbuild::sealed_artifact::make(
-          pkgbuild::artifact_encoding::package_tar_v1,
+          pkgbuild::artifact_encoding::package_tar,
           pkgbuild::artifact_compression::none, 4096,
           pkgbuild::sha256_digest(sha256_hex(digest.string()))),
       pkgbuild::execution_evidence_identity::from_sha256(
           std::string(64, '8')));
-  return incoming_package_authority::admit(
+  auto admitted = pkgbuild::image_adapter::build_image_authority::admit(
       std::move(build), std::move(image));
+  return incoming_package_authority::admit(
+      pkgbuild::plan_adapter::project_artifact(admitted));
 }
 
 [[nodiscard]] inline incoming_package_authority
@@ -396,13 +488,9 @@ installation_plan(
 {
   const incoming_package_authority incoming =
       incoming_package(entries, digest, "1.0");
-  const auto& incoming_release = incoming.candidate().release();
   pkgplan::installation_request request(
       incoming.candidate(),
-      pkgplan::artifact_package_fact(
-          pkgplan::artifact_identity::parse(digest.string()),
-          planning_identity<pkgplan::artifact_manifest_identity>(4),
-          incoming_release),
+      incoming.artifact(),
       digest,
       incoming.image(),
       authorities.snapshot,
@@ -438,14 +526,10 @@ upgrade_plan(
 {
   const incoming_package_authority incoming =
       incoming_package(entries, digest, "2.0");
-  const auto& incoming_release = incoming.candidate().release();
   pkgplan::upgrade_request request(
       installed(authorities),
       incoming.candidate(),
-      pkgplan::artifact_package_fact(
-          pkgplan::artifact_identity::parse(digest.string()),
-          planning_identity<pkgplan::artifact_manifest_identity>(5),
-          incoming_release),
+      incoming.artifact(),
       digest,
       incoming.image(),
       authorities.snapshot,

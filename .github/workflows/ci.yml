@@ -81,14 +81,39 @@ jobs:
           path: dependencies/libpkgsource
       - uses: actions/checkout@v4
         with:
+          repository: zeppe-lin/libpkgstate
+          ref: v3.0.0
+          path: dependencies/libpkgstate
+      - uses: actions/checkout@v4
+        with:
+          repository: zeppe-lin/libpkgcatalog
+          ref: v3.0.0
+          path: dependencies/libpkgcatalog
+      - uses: actions/checkout@v4
+        with:
+          repository: zeppe-lin/libpkgresolve
+          ref: v2.0.0
+          path: dependencies/libpkgresolve
+      - uses: actions/checkout@v4
+        with:
           repository: zeppe-lin/libpkgsource-plan
           ref: v1.0.0
           path: dependencies/libpkgsource-plan
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgbuild
-          ref: v2.0.0
+          ref: v3.0.0
           path: dependencies/libpkgbuild
+      - uses: actions/checkout@v4
+        with:
+          repository: zeppe-lin/libpkgbuild-image
+          ref: v1.0.0
+          path: dependencies/libpkgbuild-image
+      - uses: actions/checkout@v4
+        with:
+          repository: zeppe-lin/libpkgbuild-plan
+          ref: v1.0.0
+          path: dependencies/libpkgbuild-plan
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgapply
@@ -108,8 +133,13 @@ jobs:
           LIBPKGIMAGE_SOURCE: dependencies/libpkgimage
           LIBPKGPLAN_SOURCE: dependencies/libpkgplan
           LIBPKGSOURCE_SOURCE: dependencies/libpkgsource
+          LIBPKGSTATE_SOURCE: dependencies/libpkgstate
+          LIBPKGCATALOG_SOURCE: dependencies/libpkgcatalog
+          LIBPKGRESOLVE_SOURCE: dependencies/libpkgresolve
           LIBPKGSOURCE_PLAN_SOURCE: dependencies/libpkgsource-plan
           LIBPKGBUILD_SOURCE: dependencies/libpkgbuild
+          LIBPKGBUILD_IMAGE_SOURCE: dependencies/libpkgbuild-image
+          LIBPKGBUILD_PLAN_SOURCE: dependencies/libpkgbuild-plan
           LIBPKGAPPLY_SOURCE: dependencies/libpkgapply
         run: |
           ./ci/configure-and-test.sh build "${{ matrix.mode }}" \
@@ -167,14 +197,39 @@ jobs:
           path: dependencies/libpkgsource
       - uses: actions/checkout@v4
         with:
+          repository: zeppe-lin/libpkgstate
+          ref: v3.0.0
+          path: dependencies/libpkgstate
+      - uses: actions/checkout@v4
+        with:
+          repository: zeppe-lin/libpkgcatalog
+          ref: v3.0.0
+          path: dependencies/libpkgcatalog
+      - uses: actions/checkout@v4
+        with:
+          repository: zeppe-lin/libpkgresolve
+          ref: v2.0.0
+          path: dependencies/libpkgresolve
+      - uses: actions/checkout@v4
+        with:
           repository: zeppe-lin/libpkgsource-plan
           ref: v1.0.0
           path: dependencies/libpkgsource-plan
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgbuild
-          ref: v2.0.0
+          ref: v3.0.0
           path: dependencies/libpkgbuild
+      - uses: actions/checkout@v4
+        with:
+          repository: zeppe-lin/libpkgbuild-image
+          ref: v1.0.0
+          path: dependencies/libpkgbuild-image
+      - uses: actions/checkout@v4
+        with:
+          repository: zeppe-lin/libpkgbuild-plan
+          ref: v1.0.0
+          path: dependencies/libpkgbuild-plan
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgapply
@@ -193,8 +248,13 @@ jobs:
           LIBPKGIMAGE_SOURCE: dependencies/libpkgimage
           LIBPKGPLAN_SOURCE: dependencies/libpkgplan
           LIBPKGSOURCE_SOURCE: dependencies/libpkgsource
+          LIBPKGSTATE_SOURCE: dependencies/libpkgstate
+          LIBPKGCATALOG_SOURCE: dependencies/libpkgcatalog
+          LIBPKGRESOLVE_SOURCE: dependencies/libpkgresolve
           LIBPKGSOURCE_PLAN_SOURCE: dependencies/libpkgsource-plan
           LIBPKGBUILD_SOURCE: dependencies/libpkgbuild
+          LIBPKGBUILD_IMAGE_SOURCE: dependencies/libpkgbuild-image
+          LIBPKGBUILD_PLAN_SOURCE: dependencies/libpkgbuild-plan
           LIBPKGAPPLY_SOURCE: dependencies/libpkgapply
         run: |
           ./ci/configure-and-test.sh build-sanitize shared \

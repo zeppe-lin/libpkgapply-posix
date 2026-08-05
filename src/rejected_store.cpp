@@ -33,7 +33,7 @@ constexpr std::array<std::byte, 8> record_magic{
     std::byte{'Z'}, std::byte{'P'}, std::byte{'L'}, std::byte{'R'},
     std::byte{'J'}, std::byte{'O'}, std::byte{'B'}, std::byte{'J'}};
 constexpr std::uint16_t binding_encoding_version = 1;
-constexpr std::uint16_t rejected_record_encoding_version = 2;
+constexpr std::uint16_t rejected_record_encoding_version = 1;
 constexpr std::size_t maximum_record_size = 4U * 1024U * 1024U;
 constexpr mode_t private_directory_mode = 0700;
 constexpr mode_t private_file_mode = 0600;

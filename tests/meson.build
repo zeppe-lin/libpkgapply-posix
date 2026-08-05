@@ -3,6 +3,7 @@
 
 if get_option('tests').allowed()
   sh = find_program('sh')
+  nm = find_program('nm')
 
   fixture_test_deps = [
     libpkgapply_posix_dep,
@@ -12,6 +13,8 @@ if get_option('tests').allowed()
     dependency('libpkgresolve', version: ['>=2.0.0', '<3.0.0'], required: true, static: want_static),
     dependency('libpkgstate', version: ['>=3.0.0', '<4.0.0'], required: true, static: want_static),
   ]
+  crypto_test_deps = [libpkgapply_posix_dep, libcrypto_dep]
+  fixture_crypto_test_deps = fixture_test_deps + [libcrypto_dep]
 
   version_header_test = executable(
     'version-header-test',
@@ -25,7 +28,7 @@ if get_option('tests').allowed()
     'posix-active-incoming-test',
     'posix_active_incoming_test.cpp',
     include_directories: include_directories('../src'),
-    dependencies: libpkgapply_posix_dep,
+    dependencies: crypto_test_deps,
   )
   test('posix-active-incoming-test', posix_active_incoming_test)
 
@@ -33,7 +36,7 @@ if get_option('tests').allowed()
     'posix-active-recovery-test',
     'posix_active_recovery_test.cpp',
     include_directories: include_directories('../src'),
-    dependencies: libpkgapply_posix_dep,
+    dependencies: crypto_test_deps,
   )
   test('posix-active-recovery-test', posix_active_recovery_test)
 
@@ -63,7 +66,7 @@ if get_option('tests').allowed()
   posix_backend_routes_test = executable(
     'posix-backend-routes-test',
     'posix_backend_routes_test.cpp',
-    dependencies: fixture_test_deps,
+    dependencies: fixture_crypto_test_deps,
   )
   test('posix-backend-routes-test', posix_backend_routes_test)
 
@@ -154,7 +157,7 @@ if get_option('tests').allowed()
   posix_payload_stage_test = executable(
     'posix-payload-stage-test',
     'posix_payload_stage_test.cpp',
-    dependencies: libpkgapply_posix_dep,
+    dependencies: crypto_test_deps,
   )
   test('posix-payload-stage-test', posix_payload_stage_test)
 
@@ -175,7 +178,7 @@ if get_option('tests').allowed()
   posix_rejected_store_test = executable(
     'posix-rejected-store-test',
     'posix_rejected_store_test.cpp',
-    dependencies: fixture_test_deps,
+    dependencies: fixture_crypto_test_deps,
   )
   test('posix-rejected-store-test', posix_rejected_store_test)
 
@@ -192,6 +195,20 @@ if get_option('tests').allowed()
     dependencies: libpkgapply_posix_dep,
   )
   test('posix-target-observer-test', posix_target_observer_test)
+
+
+  if library_kind == 'shared'
+    test(
+      'verify reviewed POSIX ABI surface',
+      sh,
+      args: [
+        join_paths(meson.current_source_dir(), 'check_abi_surface.sh'),
+        nm.full_path(),
+        libpkgapply_posix.full_path(),
+        join_paths(meson.project_source_root(), 'abi/libpkgapply-posix.exports'),
+      ],
+    )
+  endif
 
   test(
     'verify pkg-config metadata',

@@ -34,6 +34,9 @@ grep -F 'generate-elf-export-script.sh' "$root/src/meson.build" >/dev/null ||
 grep -F 'verify reviewed POSIX ABI surface' "$root/tests/meson.build" >/dev/null ||
   fail 'built shared-library ABI is not audited'
 
+grep -F 'posix-rtti-link-test' "$root/tests/meson.build" >/dev/null ||
+  fail 'public RTTI link consumer is not registered'
+
 if grep -Ev '^_Z[A-Za-z0-9_]+$' "$manifest" >/dev/null; then
   fail 'ABI manifest contains a wildcard or invalid symbol'
 fi
@@ -45,6 +48,26 @@ for symbol in \
  do
   grep -Fx "$symbol" "$manifest" >/dev/null ||
     fail "required target-observer ABI symbol is absent: $symbol"
+ done
+
+for stem in \
+  N8pkgapply5posix19capture_store_errorE \
+  N8pkgapply5posix19journal_store_errorE \
+  N8pkgapply5posix19payload_stage_errorE \
+  N8pkgapply5posix19posix_backend_errorE \
+  N8pkgapply5posix20rejected_store_errorE \
+  N8pkgapply5posix21target_mutation_leaseE \
+  N8pkgapply5posix21target_observer_errorE \
+  N8pkgapply5posix22checkpoint_store_errorE \
+  N8pkgapply5posix25application_payload_stageE \
+  N8pkgapply5posix25application_posix_backendE \
+  N8pkgapply5posix27target_mutation_lease_errorE \
+  N8pkgapply5posix30completed_evidence_store_errorE
+ do
+  for prefix in _ZTI _ZTS _ZTV; do
+    grep -Fx "$prefix$stem" "$manifest" >/dev/null ||
+      fail "required public RTTI ABI symbol is absent: $prefix$stem"
+  done
  done
 
 for header in "$root"/include/libpkgapply-posix/*.h; do

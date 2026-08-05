@@ -32,6 +32,14 @@ if ! cmp -s "$expected" "$actual"; then
   fail 'dynamic symbol set differs from the reviewed ELF ABI manifest'
 fi
 
+rtti_stems=$(sed -n 's/^_ZTI\(N8pkgapply5posix[A-Za-z0-9_]*E\)$/\1/p' "$manifest")
+for stem in $rtti_stems; do
+  grep -Fx "_ZTS$stem" "$manifest" >/dev/null ||
+    fail "RTTI type-name symbol is missing for $stem"
+  grep -Fx "_ZTV$stem" "$manifest" >/dev/null ||
+    fail "RTTI vtable symbol is missing for $stem"
+done
+
 if printf '%s\n' "$raw" | grep -E 'LIBPKGAPPLY_POSIX_' >/dev/null; then
   fail 'premature named ABI version node remains'
 fi

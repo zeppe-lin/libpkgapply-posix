@@ -168,6 +168,13 @@ if get_option('tests').allowed()
   )
   test('posix-public-header-test', posix_public_header_test)
 
+  posix_rtti_link_test = executable(
+    'posix-rtti-link-test',
+    'posix_rtti_link_test.cpp',
+    dependencies: libpkgapply_posix_dep,
+  )
+  test('posix-rtti-link-test', posix_rtti_link_test)
+
   posix_rejected_store_header_test = executable(
     'posix-rejected-store-header-test',
     'posix_rejected_store_header_test.cpp',

@@ -11,6 +11,8 @@
   requirements.
 - Added hidden-by-default visibility, explicit API exports, repository
   contracts, installed-consumer qualification, and independent CI.
+- Reviewed the complete public C++ RTTI and vtable surface and added a
+  link consumer covering every exported polymorphic type.
 - Anchored every public POSIX exception domain with an out-of-line owner
   destructor.
 - Published complete mutation-lease, target-observation, and composed-backend

@@ -1,4 +1,4 @@
-% LIBPKGAPPLY-POSIX(3) libpkgapply-posix | Version 3.0.0
+% LIBPKGAPPLY-POSIX(3) libpkgapply-posix | Version 3.1.0
 
 <!-- Generated from libpkgapply-posix.3.scdoc; do not edit. -->
 

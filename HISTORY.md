@@ -1,5 +1,14 @@
 # History
 
+## 3.1.0
+
+- Added a descriptor-anchored direct request-to-journal restart index.
+- Published the index only after the referenced journal snapshot is durable.
+- Kept attempt selection and journal discovery outside the mechanism provider;
+  missing or contradictory index authority fails closed.
+- Preserved `libpkgapply-posix.so.2` and API generation 2 with one additive
+  journal-store lookup method.
+
 ## 3.0.0
 
 - Extracted the existing `libpkgapply-posix.so.2` product from

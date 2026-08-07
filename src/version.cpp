@@ -8,7 +8,7 @@ namespace pkgapply::posix {
 std::string_view
 version() noexcept
 {
-  return "3.0.0";
+  return "3.1.0";
 }
 
 } // namespace pkgapply::posix

@@ -14,6 +14,6 @@ if command -v clang++ >/dev/null 2>&1; then
 fi
 
 python3 "$root/tools/check-man-markdown.py" \
-  --root "$root" --project libpkgapply-posix --version 3.0.0
+  --root "$root" --project libpkgapply-posix --version 3.1.0
 python3 "$root/tools/check-html-manifest.py" \
   --root "$root" --project libpkgapply-posix

@@ -10,7 +10,7 @@ escaping local links, leaked source/build paths, and source-format links. The
 installed tree is placed below:
 
 ```
-share/htmldocs/libpkgapply-posix/3.0.0
+share/htmldocs/libpkgapply-posix/3.1.0
 ```
 
 HTML output is derived. Edit the Markdown, scdoc, headers, or Doxygen source and

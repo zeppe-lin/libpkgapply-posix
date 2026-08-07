@@ -14,7 +14,7 @@ static_assert(std::is_base_of_v<
 
 int main()
 {
-  return pkgapply::posix::version() == "3.0.0" &&
+  return pkgapply::posix::version() == "3.1.0" &&
              pkgapply::posix::api_version == 2
          ? 0
          : 1;

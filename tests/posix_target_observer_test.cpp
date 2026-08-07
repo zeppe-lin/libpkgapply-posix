@@ -123,6 +123,12 @@ int main()
               regular.object()->regular_content().value()->string() ==
                   "v1:sha256:88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589",
           "regular content digest was not retained");
+  require(regular.object()->hardlink().state() ==
+              pkgapply::fact_state::unknown,
+          "hard-link anchor invented a peer relation");
+  require(regular.object()->completeness() ==
+              pkgapply::object_fact_completeness::complete,
+          "hard-link anchor observation was not complete");
 
   const auto& hardlink = find(batch, "usr/bin/tool-link");
   require(hardlink.state() == pkgapply::fact_state::known && hardlink.object(),
@@ -130,6 +136,9 @@ int main()
   require(hardlink.object()->hardlink().state() == pkgapply::fact_state::known &&
               hardlink.object()->hardlink().value()->anchor() == tool,
           "hard-link anchor was not proven");
+  require(hardlink.object()->completeness() ==
+              pkgapply::object_fact_completeness::complete,
+          "hard-link peer observation was not complete");
 
   const auto& symlink = find(batch, "usr/bin/tool-symlink");
   require(symlink.state() == pkgapply::fact_state::known && symlink.object() &&

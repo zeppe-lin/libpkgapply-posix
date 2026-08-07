@@ -305,7 +305,6 @@ observe_one(int root_fd,
     content = qualified_fact<completed_regular_content_identity>::known(
         completed_regular_content_identity::parse(digest_text(digest)));
     hardlink = qualified_fact<completed_hardlink_relation>::unknown();
-    completeness = object_fact_completeness::partial;
 
     if (const auto* expectation = find_hardlink(hardlinks, path)) {
       const auto anchor = stat_leaf(root_fd, expectation->anchor());
@@ -316,7 +315,6 @@ observe_one(int root_fd,
       }
       hardlink = qualified_fact<completed_hardlink_relation>::known(
           completed_hardlink_relation(expectation->anchor()));
-      completeness = object_fact_completeness::complete;
     }
   } else if (kind == completed_object_kind::symlink) {
     constexpr std::size_t maximum_symlink_size = 1024U * 1024U;

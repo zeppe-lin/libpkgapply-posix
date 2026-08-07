@@ -266,10 +266,25 @@ if get_option('tests').allowed()
     sh,
     args: [join_paths(meson.current_source_dir(), 'contracts/check_ci_contract.sh'), meson.project_source_root()],
   )
+  libpkgapply_public_include = libpkgapply_dep.get_variable(
+    pkgconfig: 'includedir',
+  )
+  libpkgimage_public_include = libpkgimage_dep.get_variable(
+    pkgconfig: 'includedir',
+  )
+  libpkgplan_public_include = libpkgplan_dep.get_variable(
+    pkgconfig: 'includedir',
+  )
   test(
     'contract documentation-contract',
     sh,
-    args: [join_paths(meson.current_source_dir(), 'contracts/check_documentation_contract.sh'), meson.project_source_root()],
+    args: [
+      join_paths(meson.current_source_dir(), 'contracts/check_documentation_contract.sh'),
+      meson.project_source_root(),
+      libpkgapply_public_include,
+      libpkgimage_public_include,
+      libpkgplan_public_include,
+    ],
   )
   test(
     'contract extraction-contract',

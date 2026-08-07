@@ -19,3 +19,7 @@ Qualification covers five layers.
 Sanitizer jobs build the complete dependency chain with ASan and UBSan. Tests
 which require Linux/POSIX filesystem semantics run only on a compatible host;
 they do not silently downgrade to model-only assertions.
+
+The documentation contract parses public headers against the include roots of
+the exact `libpkgapply`, `libpkgimage`, and `libpkgplan` dependencies resolved by
+Meson; ambient system installations are not part of qualification authority.

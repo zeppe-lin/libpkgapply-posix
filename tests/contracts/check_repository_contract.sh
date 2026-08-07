@@ -13,6 +13,11 @@ fi
 test -x "$root/tools/check-public-documentation.py" || fail 'public documentation checker is absent'
 test -x "$root/tools/check-doxygen-contract.py" || fail 'Doxygen contract checker is absent'
 
+grep -F -- '--include-root' "$root/tests/contracts/check_documentation_contract.sh" >/dev/null ||
+  fail 'documentation parser dependency binding is absent'
+grep -F "pkgconfig: 'includedir'" "$root/tests/meson.build" >/dev/null ||
+  fail 'Meson documentation dependency binding is absent'
+
 for tool in \
   build-html-docs.py check-html-docs.py install-html-docs.py \
   render-man-markdown.py check-man-markdown.py check-html-manifest.py; do

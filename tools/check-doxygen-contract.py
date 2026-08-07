@@ -49,7 +49,7 @@ def decode_json_stream(text: str) -> list[dict[str, Any]]:
 
 def run_clang(
     clang: str,
-    include_root: Path,
+    include_roots: list[Path],
     namespace: str,
     header: Path,
 ) -> tuple[Path, list[dict[str, Any]]]:
@@ -60,7 +60,10 @@ def run_clang(
         "-std=c++17",
         "-fsyntax-only",
         "-fparse-all-comments",
-        f"-I{include_root}",
+    ]
+    for include_root in include_roots:
+        command.append(f"-I{include_root}")
+    command += [
         "-Xclang",
         "-ast-dump=json",
         "-Xclang",
@@ -280,10 +283,18 @@ def main() -> int:
     parser.add_argument("--include-subdir", required=True)
     parser.add_argument("--namespace", required=True)
     parser.add_argument("--clang", required=True)
+    parser.add_argument(
+        "--include-root",
+        action="append",
+        default=[],
+        type=Path,
+        help="additional public dependency include root",
+    )
     args = parser.parse_args()
 
     root = args.root.resolve()
     include_root = root / "include"
+    include_roots = [include_root] + [path.resolve() for path in args.include_root]
     header_root = include_root / args.include_subdir
     headers = sorted(header_root.glob("*.h"))
     if not headers:
@@ -295,7 +306,7 @@ def main() -> int:
             executor.submit(
                 run_clang,
                 args.clang,
-                include_root,
+                include_roots,
                 args.namespace,
                 header,
             )

@@ -79,10 +79,14 @@ private:
   [[nodiscard]] const captured_old_object* capture(
       const pkgplan::package_path& path) const noexcept;
   void retain_effect(const pkgplan::package_path& path, bool incoming);
+  void complete_effect(const pkgplan::package_path& path, bool incoming);
+  [[nodiscard]] bool refresh_incoming_ancestor_directories(
+      const pkgplan::package_path& changed_path);
 
   struct attempted_effect final {
     pkgplan::package_path path;
     bool incoming;
+    bool completed;
   };
 
   application_active_workspace workspace_;

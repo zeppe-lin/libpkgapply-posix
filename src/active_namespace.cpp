@@ -875,7 +875,8 @@ matches_known(const qualified_fact<Value>& fact, const Value& expected)
 matches_incoming(
     int root_fd,
     const pkgplan::package_path& path,
-    const pkgimage::package_entry& entry)
+    const pkgimage::package_entry& entry,
+    bool allow_directory_mtime_drift = false)
 {
   application_target_observer observer =
       application_target_observer::from_directory_fd(root_fd);
@@ -897,7 +898,12 @@ matches_incoming(
   if (object.kind() != incoming_kind(entry.type) ||
       !matches_known(object.mode(), entry.mode) ||
       !matches_known(object.uid(), entry.uid) ||
-      !matches_known(object.gid(), entry.gid) ||
+      !matches_known(object.gid(), entry.gid))
+  {
+    return false;
+  }
+  if (!(allow_directory_mtime_drift &&
+        entry.type == pkgimage::entry_type::directory) &&
       !matches_known(
           object.mtime(),
           completed_object_timestamp{
@@ -1151,7 +1157,48 @@ void application_active_namespace::retain_effect(
       throw std::logic_error("active path received contradictory effects");
     return;
   }
-  effects_.push_back(attempted_effect{path, incoming});
+  effects_.push_back(attempted_effect{path, incoming, false});
+}
+
+void application_active_namespace::complete_effect(
+    const pkgplan::package_path& path,
+    bool incoming)
+{
+  const auto found = std::find_if(
+      effects_.begin(), effects_.end(),
+      [&path](const auto& value) { return value.path == path; });
+  if (found == effects_.end() || found->incoming != incoming)
+    throw std::logic_error("completed active effect lacks attempted authority");
+  found->completed = true;
+}
+
+bool application_active_namespace::refresh_incoming_ancestor_directories(
+    const pkgplan::package_path& changed_path)
+{
+  if (incoming_image_ == nullptr)
+    return true;
+
+  for (const auto& effect : effects_) {
+    if (!effect.incoming || !effect.completed ||
+        !effect.path.is_ancestor_of(changed_path))
+      continue;
+
+    const auto* entry = incoming_image_->find(
+        pkgimage::package_path::parse(effect.path.string()));
+    if (entry == nullptr || entry->type != pkgimage::entry_type::directory)
+      throw std::logic_error(
+          "completed incoming ancestor is not a package directory");
+
+    active_path_workspace workspace = workspace_.open(effect.path);
+    unique_fd directory(::openat(
+        workspace.parent_descriptor(), workspace.leaf().c_str(),
+        O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW));
+    if (directory.get() < 0 ||
+        !apply_descriptor_metadata(directory.get(), *entry))
+      return false;
+    retain_dirty_descriptor(directory.release());
+  }
+  return true;
 }
 
 void application_active_namespace::retain_completed_effect(
@@ -1194,7 +1241,8 @@ void application_active_namespace::retain_completed_effect(
     established = entry != nullptr &&
         entry->path.string() == request.path().string() &&
         matches_incoming(
-            workspace_.target_root_descriptor(), request.path(), *entry);
+            workspace_.target_root_descriptor(), request.path(), *entry,
+            true);
   }
   else {
     established = !stat_leaf(
@@ -1204,6 +1252,7 @@ void application_active_namespace::retain_completed_effect(
     throw std::invalid_argument(
         "completed active effect is not visible in the selected target");
   retain_effect(request.path(), incoming);
+  complete_effect(request.path(), incoming);
 }
 
 void application_active_namespace::retain_dirty_descriptor(int descriptor)
@@ -1235,7 +1284,14 @@ backend_operation_result application_active_namespace::publish_incoming(
   if (entry.type == pkgimage::entry_type::directory && current &&
       S_ISDIR(current->st_mode))
   {
-    return update_existing_directory(*this, workspace, entry);
+    backend_operation_result result =
+        update_existing_directory(*this, workspace, entry);
+    if (result.outcome() == backend_operation_outcome::completed) {
+      complete_effect(request.path(), true);
+      if (!refresh_incoming_ancestor_directories(request.path()))
+        return operation(backend_operation_outcome::indeterminate);
+    }
+    return result;
   }
 
   unique_fd prepared;
@@ -1274,6 +1330,11 @@ backend_operation_result application_active_namespace::publish_incoming(
     retain_dirty_descriptor(published.object_descriptor);
   if (published.parent_descriptor >= 0)
     retain_dirty_descriptor(published.parent_descriptor);
+  if (published.result.outcome() == backend_operation_outcome::completed) {
+    complete_effect(request.path(), true);
+    if (!refresh_incoming_ancestor_directories(request.path()))
+      return operation(backend_operation_outcome::indeterminate);
+  }
   return std::move(published.result);
 }
 
@@ -1331,6 +1392,9 @@ backend_operation_result application_active_namespace::remove(
     const int parent = duplicate_fd(workspace.parent_descriptor());
     if (parent >= 0)
       retain_dirty_descriptor(parent);
+    complete_effect(request.path(), false);
+    if (!refresh_incoming_ancestor_directories(request.path()))
+      return operation(backend_operation_outcome::indeterminate);
     return operation(backend_operation_outcome::completed);
   }
 
@@ -1352,6 +1416,12 @@ backend_operation_result application_active_namespace::recover(
 
   active_path_workspace workspace = workspace_.open(path);
   const active_workspace_snapshot snapshot = workspace.inspect();
+  const auto completed_recovery = [&]() {
+    if (!still_admitted(workspace_, *before) ||
+        !refresh_incoming_ancestor_directories(path))
+      return operation(backend_operation_outcome::indeterminate);
+    return operation(backend_operation_outcome::completed);
+  };
   if (snapshot.state() == active_workspace_state::contradictory)
     return operation(backend_operation_outcome::indeterminate);
 
@@ -1362,10 +1432,7 @@ backend_operation_result application_active_namespace::recover(
     {
       return operation(backend_operation_outcome::indeterminate);
     }
-    return operation(
-        still_admitted(workspace_, *before)
-            ? backend_operation_outcome::completed
-            : backend_operation_outcome::indeterminate);
+    return completed_recovery();
   }
 
   if (snapshot.state() == active_workspace_state::displaced ||
@@ -1396,14 +1463,11 @@ backend_operation_result application_active_namespace::recover(
     const int parent = duplicate_fd(workspace.parent_descriptor());
     if (parent >= 0)
       retain_dirty_descriptor(parent);
-    return operation(
-        still_admitted(workspace_, *before)
-            ? backend_operation_outcome::completed
-            : backend_operation_outcome::indeterminate);
+    return completed_recovery();
   }
 
   if (still_admitted(workspace_, *before))
-    return operation(backend_operation_outcome::completed);
+    return completed_recovery();
 
   const auto effect = std::find_if(
       effects_.begin(), effects_.end(),
@@ -1430,10 +1494,7 @@ backend_operation_result application_active_namespace::recover(
     const int parent = duplicate_fd(workspace.parent_descriptor());
     if (parent >= 0)
       retain_dirty_descriptor(parent);
-    return operation(
-        still_admitted(workspace_, *before)
-            ? backend_operation_outcome::completed
-            : backend_operation_outcome::indeterminate);
+    return completed_recovery();
   }
 
   if (before->state() != fact_state::known || !before->object())
@@ -1452,10 +1513,7 @@ backend_operation_result application_active_namespace::recover(
         *this, workspace, directory);
     if (result.outcome() != backend_operation_outcome::completed)
       return result;
-    return operation(
-        still_admitted(workspace_, *before)
-            ? backend_operation_outcome::completed
-            : backend_operation_outcome::indeterminate);
+    return completed_recovery();
   }
 
   recovery_preparation prepared = [&]() {
@@ -1499,10 +1557,7 @@ backend_operation_result application_active_namespace::recover(
     retain_dirty_descriptor(published.parent_descriptor);
   if (published.result.outcome() != backend_operation_outcome::completed)
     return published.result;
-  return operation(
-      still_admitted(workspace_, *before)
-          ? backend_operation_outcome::completed
-          : backend_operation_outcome::indeterminate);
+  return completed_recovery();
 }
 
 backend_operation_result application_active_namespace::discard_recovery(
@@ -1534,6 +1589,8 @@ backend_operation_result application_active_namespace::discard_recovery(
   const int parent = duplicate_fd(workspace.parent_descriptor());
   if (parent >= 0)
     retain_dirty_descriptor(parent);
+  if (!refresh_incoming_ancestor_directories(path))
+    return operation(backend_operation_outcome::indeterminate);
   return operation(backend_operation_outcome::completed);
 }
 

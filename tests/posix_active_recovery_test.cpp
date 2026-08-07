@@ -303,11 +303,129 @@ load_capture(
   captures.push_back(std::move(*loaded));
 }
 
+void
+test_completed_directory_restart_tolerates_descendant_mtime()
+{
+  temporary_directory target("libpkgapply-active-directory-restart");
+
+  auto usr = directory("usr", 0755);
+  usr.mtime = 303;
+  usr.mtime_nanoseconds = 41;
+  memory_archive archive({usr}, {""});
+  const auto active_attempt = attempt(16);
+
+  auto observer =
+      pkgapply::posix::application_target_observer::open(target.path());
+  auto before = observer.observe(
+      {pkgplan::package_path::parse("usr")}).observations();
+  require(before.size() == 1U &&
+              before.front().state() == pkgapply::fact_state::not_applicable,
+          "directory restart fixture did not begin absent");
+
+  const int root_descriptor = ::open(
+      target.path().c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+  require(root_descriptor >= 0,
+          "cannot open directory restart target root");
+  {
+    auto active = pkgapply::posix::detail::application_active_namespace::bind(
+        root_descriptor, active_attempt, archive.image(), nullptr, before);
+    require(active.publish_incoming(activate(archive.image().entries().front())).
+                outcome() == pkgapply::backend_operation_outcome::completed,
+            "directory restart fixture did not publish parent directory");
+  }
+
+  make_directory(target.path() + "/usr/uncommitted-child");
+  auto reopened = pkgapply::posix::detail::application_active_namespace::bind(
+      root_descriptor, active_attempt, archive.image(), nullptr, before);
+  reopened.retain_completed_effect(
+      activate(archive.image().entries().front()),
+      pkgapply::backend_operation_result(
+          pkgapply::backend_operation_outcome::completed));
+  require(::close(root_descriptor) == 0,
+          "cannot close directory restart target root");
+}
+
+void
+test_fresh_nested_recovery()
+{
+  temporary_directory target("libpkgapply-active-nested-recovery");
+  temporary_directory payload_root("libpkgapply-nested-recovery-payload");
+
+  auto usr = directory("usr", 0755);
+  usr.mtime = 101;
+  usr.mtime_nanoseconds = 17;
+  auto bin = directory("usr/bin", 0755);
+  bin.mtime = 202;
+  bin.mtime_nanoseconds = 29;
+  auto tool = regular("usr/bin/tool", "nested", 0755);
+  std::vector<pkgimage::package_entry> entries{usr, bin, tool};
+  memory_archive archive(entries, {"", "", "nested"});
+  const auto selection = pkgimage::entry_selection::all_regular(archive.image());
+  const auto active_attempt = attempt(24);
+
+  auto payload_store = pkgapply::posix::application_payload_store::open(
+      payload_root.path());
+  {
+    auto stage = payload_store.begin(
+        active_attempt, archive.image(), selection);
+    archive.replay(selection, *stage);
+    require(stage->seal().outcome() ==
+                pkgapply::backend_operation_outcome::completed,
+            "nested recovery payload stage did not seal");
+  }
+  auto payloads = payload_store.load(
+      active_attempt, archive.image(), selection);
+  require(payloads.has_value(),
+          "nested recovery payload stage disappeared");
+
+  auto observer =
+      pkgapply::posix::application_target_observer::open(target.path());
+  auto before = observer.observe(
+      {pkgplan::package_path::parse("usr"),
+       pkgplan::package_path::parse("usr/bin"),
+       pkgplan::package_path::parse("usr/bin/tool")}).observations();
+  for (const auto& value : before)
+    require(value.state() == pkgapply::fact_state::not_applicable,
+            "nested recovery fixture did not begin absent");
+
+  const int root_descriptor = ::open(
+      target.path().c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+  require(root_descriptor >= 0,
+          "cannot open nested recovery target root");
+  auto active = pkgapply::posix::detail::application_active_namespace::bind(
+      root_descriptor, active_attempt, archive.image(), &*payloads, before);
+
+  for (const auto& value : archive.image().entries()) {
+    require(active.publish_incoming(activate(value)).outcome() ==
+                pkgapply::backend_operation_outcome::completed,
+            "nested recovery incoming publication failed");
+  }
+
+  require(active.recover(
+              pkgplan::package_path::parse("usr/bin/tool")).outcome() ==
+              pkgapply::backend_operation_outcome::completed,
+          "nested recovery did not remove incoming leaf");
+  require(active.recover(
+              pkgplan::package_path::parse("usr/bin")).outcome() ==
+              pkgapply::backend_operation_outcome::completed,
+          "nested recovery did not remove incoming child directory");
+  require(active.recover(pkgplan::package_path::parse("usr")).outcome() ==
+              pkgapply::backend_operation_outcome::completed,
+          "nested recovery did not remove incoming parent directory");
+  require(absent(target.path() + "/usr"),
+          "nested recovery did not restore empty target");
+  require(::close(root_descriptor) == 0,
+          "cannot close nested recovery target root");
+}
+
 } // namespace
 
 int
 main()
 {
+  test_completed_directory_restart_tolerates_descendant_mtime();
+  test_fresh_nested_recovery();
+
   temporary_directory target("libpkgapply-active-recovery");
   temporary_directory payload_root("libpkgapply-recovery-payload");
   temporary_directory capture_root("libpkgapply-recovery-capture");

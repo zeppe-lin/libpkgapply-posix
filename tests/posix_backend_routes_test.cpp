@@ -243,6 +243,20 @@ pkgimage::package_entry regular_entry(
   return entry;
 }
 
+pkgimage::package_entry directory_entry(
+    std::string path, mode_t mode, std::int64_t mtime, std::uint32_t nanoseconds)
+{
+  pkgimage::package_entry entry(
+      pkgimage::package_path::parse(std::move(path)),
+      pkgimage::entry_type::directory);
+  entry.mode = static_cast<std::uint32_t>(mode);
+  entry.uid = static_cast<std::uint64_t>(::getuid());
+  entry.gid = static_cast<std::uint64_t>(::getgid());
+  entry.mtime = mtime;
+  entry.mtime_nanoseconds = nanoseconds;
+  return entry;
+}
+
 class memory_archive final : public pkgimage::package_archive {
 public:
   memory_archive(std::vector<pkgimage::package_entry> entries,
@@ -385,6 +399,58 @@ void test_regular_install()
           "regular installation did not retain sealed payload authority");
 }
 
+void test_nested_install_finalizes_directory_metadata()
+{
+  backend_layout layout("nested", 75);
+  const auto authorities =
+      pkgapply::test::fixture::planning_authorities(layout.target().target());
+  const std::string bytes = "nested-payload";
+  const auto usr = directory_entry("usr", 0755, 101, 17);
+  const auto bin = directory_entry("usr/bin", 0755, 202, 29);
+  const auto tool = regular_entry("usr/bin/tool", bytes, 0755);
+  const std::vector<pkgimage::package_entry> entries{usr, bin, tool};
+  const auto digest = pkgimage::complete_archive_digest::from_sha256(
+      sha256("nested-install-archive"));
+  const auto plan = pkgapply::test::fixture::installation_plan(
+      authorities, entries,
+      {pkgplan::target_path_observation::absent(
+           pkgplan::package_path::parse("usr")),
+       pkgplan::target_path_observation::absent(
+           pkgplan::package_path::parse("usr/bin")),
+       pkgplan::target_path_observation::absent(
+           pkgplan::package_path::parse("usr/bin/tool"))},
+      {}, std::nullopt, digest);
+  const auto request = pkgapply::installation_application_request::make(
+      plan, pkgapply::test::fixture::incoming_package(entries, digest),
+      layout.target(), execution_control());
+  memory_archive archive(entries, {"", "", bytes}, digest);
+  fake_lease lease(
+      application_identity<pkgapply::mutation_lease_instance_identity>(105),
+      layout.target().identity(), layout.target().mutation_exclusion_domain());
+  const auto state = state_projection(lease, plan.preconditions(), 106);
+
+  const auto receipt = pkgapply::apply(
+      request, state, lease, layout.backend(), archive);
+  require(receipt.outcome() == pkgapply::application_attempt_outcome::completed,
+          "POSIX backend did not complete nested installation");
+  require(read_file(layout.target_path() + "/usr/bin/tool") == bytes,
+          "nested installation changed regular payload bytes");
+
+  struct stat usr_status {};
+  struct stat bin_status {};
+  require(::stat((layout.target_path() + "/usr").c_str(), &usr_status) == 0 &&
+              ::stat((layout.target_path() + "/usr/bin").c_str(),
+                     &bin_status) == 0,
+          "nested installation did not publish parent directories");
+  require(usr_status.st_mtim.tv_sec == usr.mtime &&
+              static_cast<std::uint32_t>(usr_status.st_mtim.tv_nsec) ==
+                  usr.mtime_nanoseconds &&
+              bin_status.st_mtim.tv_sec == bin.mtime &&
+              static_cast<std::uint32_t>(bin_status.st_mtim.tv_nsec) ==
+                  bin.mtime_nanoseconds,
+          "nested installation did not restore sealed directory mtimes");
+}
+
 void test_incoming_rejected_stage()
 {
   backend_layout layout("rejected", 90);
@@ -518,6 +584,7 @@ void test_regular_removal_with_capture()
 int main()
 {
   test_regular_install();
+  test_nested_install_finalizes_directory_metadata();
   test_incoming_rejected_stage();
   test_regular_removal_with_capture();
   return 0;

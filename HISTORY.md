@@ -2,6 +2,8 @@
 
 ## 3.1.0
 
+- Keep direct incoming regular rejected-object evidence publication-complete
+  when no hard-link peer relation is asserted.
 - Added a descriptor-anchored direct request-to-journal restart index.
 - Published the index only after the referenced journal snapshot is durable.
 - Kept attempt selection and journal discovery outside the mechanism provider;

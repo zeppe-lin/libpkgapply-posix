@@ -84,6 +84,8 @@ Immutable rejected-store tests prove:
   sealed attempt, image, and payload authority;
 * failed source-authority checks leave no completed rejected record;
 * old records consume only pre-mutation captures admitted for rejected use;
+* direct regular records remain complete without inventing a hard-link peer,
+  while hard-link records retain the exact admitted anchor relation;
 * regular and hard-link records retain independently verified, self-contained
   bytes;
 * hard-link records preserve their logical anchor relation;

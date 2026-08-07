@@ -488,6 +488,12 @@ int main()
   require(loaded_regular->observation().object()->provenance() ==
               pkgapply::object_fact_provenance::incoming_image,
           "incoming rejected record lost image provenance");
+  require(loaded_regular->observation().object()->hardlink().state() ==
+              pkgapply::fact_state::unknown,
+          "direct regular rejected record invented a hard-link peer");
+  require(loaded_regular->observation().object()->completeness() ==
+              pkgapply::object_fact_completeness::complete,
+          "direct regular rejected record was mislabeled partial");
   {
     auto object = loaded_regular->open_regular();
     require(object.size() == 4 &&
@@ -531,6 +537,9 @@ int main()
   require(loaded_hardlink->observation().object()->hardlink().value()->anchor() ==
               pkgplan::package_path::parse("usr/bin/tool"),
           "hard-link rejected record changed its anchor");
+  require(loaded_hardlink->observation().object()->completeness() ==
+              pkgapply::object_fact_completeness::complete,
+          "hard-link rejected record was not complete");
   {
     auto object = loaded_hardlink->open_regular();
     require(read_descriptor(object.descriptor()) == "abcd",

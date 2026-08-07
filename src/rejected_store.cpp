@@ -1139,7 +1139,6 @@ incoming_observation(const pkgimage::package_image& image,
           completed_regular_content_identity::parse(
               entry.regular_content->string()));
       hardlink = qualified_fact<completed_hardlink_relation>::unknown();
-      completeness = object_fact_completeness::partial;
       break;
 
     case pkgimage::entry_type::hardlink: {

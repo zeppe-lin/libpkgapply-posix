@@ -93,9 +93,11 @@ rejected-effect request and verifies its logical path. Directories, symbolic
 links, FIFOs, and device entries are published from those image facts without
 inventing a payload-stage requirement. Regular and hard-link entries require a
 sealed payload set bound to the same attempt, nonce, and package-image identity.
-A hard-link record preserves its logical anchor relation and copies the anchor's
-verified regular bytes, so restart does not depend on private incoming staging
-or the current active target.
+A direct regular entry remains a complete object fact with an unknown hard-link
+relation: no peer anchor is asserted, but every state-publication-required object
+fact comes from the sealed image. A hard-link record preserves its logical anchor
+relation and copies the anchor's verified regular bytes, so restart does not
+depend on private incoming staging or the current active target.
 
 Old publication accepts only a capture from the same attempt and logical path
 whose capture request explicitly admitted rejected-object use. Regular bytes are

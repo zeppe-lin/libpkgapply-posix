@@ -137,18 +137,30 @@ void require_directory(int fd)
         "journal-store descriptor does not name a directory");
 }
 
-std::string storage_name(const application_journal_identity& identity)
+std::string digest_suffix(std::string_view text, std::string_view subject)
 {
-  const auto& text = identity.string();
   constexpr std::string_view prefix = "v1:sha256:";
   if (text.size() != prefix.size() + 64 ||
       text.compare(0, prefix.size(), prefix) != 0)
   {
     throw journal_store_error(
         journal_store_error_code::snapshot_corrupt, 0,
-        "journal identity has no supported storage representation");
+        std::string(subject) +
+            " identity has no supported storage representation");
   }
-  return "journal-v1-sha256-" + text.substr(prefix.size()) + ".bin";
+  return std::string(text.substr(prefix.size()));
+}
+
+std::string storage_name(const application_journal_identity& identity)
+{
+  return "journal-v1-sha256-" +
+         digest_suffix(identity.string(), "journal") + ".bin";
+}
+
+std::string active_name(const application_request_identity& identity)
+{
+  return "active-request-v1-sha256-" +
+         digest_suffix(identity.string(), "application request") + ".ref";
 }
 
 int nofollow_flag() noexcept
@@ -251,6 +263,32 @@ std::optional<application_journal_encoding> read_encoding(
     break;
   }
   return bytes;
+}
+
+application_journal_encoding encode_active_reference(
+    const application_journal_identity& journal)
+{
+  const auto text = journal.string() + "\n";
+  return application_journal_encoding(text.begin(), text.end());
+}
+
+application_journal_identity decode_active_reference(
+    const application_journal_encoding& encoding)
+{
+  constexpr std::size_t encoded_size = 10 + 64 + 1;
+  if (encoding.size() != encoded_size || encoding.back() != '\n')
+    throw journal_store_error(
+        journal_store_error_code::snapshot_corrupt, 0,
+        "active application-request index is malformed");
+  try {
+    return application_journal_identity::parse(std::string(
+        encoding.begin(), encoding.end() - 1));
+  } catch (const std::exception& error) {
+    throw journal_store_error(
+        journal_store_error_code::snapshot_corrupt, 0,
+        std::string("active application-request index is corrupt: ") +
+            error.what());
+  }
 }
 
 application_journal_record decode_stored(
@@ -449,6 +487,8 @@ application_journal_record application_journal_store::publish(
     const application_journal_record& record)
 {
   const auto name = storage_name(record.header().identity());
+  application_journal_record retained = record;
+  bool publish_snapshot = true;
   if (const auto current = read_encoding(directory_fd_, name)) {
     const auto previous = decode_stored(*current, record.header().identity());
     try {
@@ -460,16 +500,20 @@ application_journal_record application_journal_store::publish(
               error.what());
     }
     if (previous.identity() == record.identity()) {
-      synchronize_fd(
-          directory_fd_, journal_store_error_code::directory_sync_failed,
-          "cannot confirm journal-store directory durability", true);
-      return previous;
+      retained = previous;
+      publish_snapshot = false;
     }
   }
 
-  const auto encoding = encode_application_journal(record);
-  publish_encoding(directory_fd_, name, encoding);
-  return record;
+  if (publish_snapshot) {
+    const auto encoding = encode_application_journal(record);
+    publish_encoding(directory_fd_, name, encoding);
+  }
+
+  const auto active = encode_active_reference(record.header().identity());
+  publish_encoding(
+      directory_fd_, active_name(record.header().request()), active);
+  return retained;
 }
 
 std::optional<application_journal_record> application_journal_store::load(
@@ -480,6 +524,26 @@ std::optional<application_journal_record> application_journal_store::load(
   if (!encoding)
     return std::nullopt;
   return decode_stored(*encoding, journal);
+}
+
+std::optional<application_journal_record>
+application_journal_store::load_active(
+    const application_request_identity& request) const
+{
+  const auto reference = read_encoding(directory_fd_, active_name(request));
+  if (!reference)
+    return std::nullopt;
+  const auto journal = decode_active_reference(*reference);
+  const auto record = load(journal);
+  if (!record)
+    throw journal_store_error(
+        journal_store_error_code::snapshot_corrupt, 0,
+        "active application-request index references a missing journal");
+  if (record->header().request() != request)
+    throw journal_store_error(
+        journal_store_error_code::snapshot_corrupt, 0,
+        "active application-request index references another request");
+  return record;
 }
 
 } // namespace pkgapply::posix

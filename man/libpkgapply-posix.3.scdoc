@@ -92,6 +92,12 @@ payloads, captures, rejected records, active target/workspace facts, durability
 facts, and completed evidence. Missing or contradictory authority is a typed
 restart failure, not permission to repeat unresolved mutation.
 
+The journal store also retains one direct active-journal index per exact
+application-request identity. *load_active()* follows only that index and then
+validates the named journal against the request. It does not scan journals,
+select a newest attempt, or reconstruct caller policy from storage order. The
+index is replaced only after the referenced journal snapshot is durable.
+
 # DURABILITY
 
 The six application durability domains route independently:

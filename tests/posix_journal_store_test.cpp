@@ -50,32 +50,34 @@ Identity planning_identity(std::uint8_t value)
   return Identity::from_sha256(bytes);
 }
 
-pkgapply::application_journal_header header(std::uint8_t seed = 1)
+pkgapply::application_journal_header header(
+    std::uint8_t request_seed = 1,
+    std::uint8_t attempt_seed = 1)
 {
   pkgapply::application_attempt_nonce::byte_array nonce{};
   for (std::size_t index = 0; index < nonce.size(); ++index)
-    nonce[index] = static_cast<std::uint8_t>(seed + 20 + index);
+    nonce[index] = static_cast<std::uint8_t>(attempt_seed + 20 + index);
   const auto request =
-      application_identity<pkgapply::application_request_identity>(seed);
+      application_identity<pkgapply::application_request_identity>(request_seed);
   const auto target = application_identity<
-      pkgapply::application_target_context_identity>(seed + 1);
+      pkgapply::application_target_context_identity>(request_seed + 1);
   const auto backend =
-      application_identity<pkgapply::mutation_backend_identity>(seed + 2);
+      application_identity<pkgapply::mutation_backend_identity>(request_seed + 2);
   const auto attempt = pkgapply::application_attempt::make(
       request, target, backend,
       pkgapply::application_attempt_nonce::from_bytes(nonce));
   return pkgapply::application_journal_header::make(
       pkgplan::operation_kind::install,
       request,
-      planning_identity<pkgplan::operation_plan_identity>(seed + 3),
+      planning_identity<pkgplan::operation_plan_identity>(request_seed + 3),
       attempt,
       target,
       application_identity<
-          pkgapply::application_execution_control_identity>(seed + 4),
+          pkgapply::application_execution_control_identity>(request_seed + 4),
       application_identity<
-          pkgapply::lease_bound_state_projection_identity>(seed + 5),
+          pkgapply::lease_bound_state_projection_identity>(request_seed + 5),
       application_identity<
-          pkgapply::mutation_lease_instance_identity>(seed + 6),
+          pkgapply::mutation_lease_instance_identity>(request_seed + 6),
       backend);
 }
 
@@ -87,10 +89,13 @@ std::vector<pkgapply::application_journal_effect> effects()
       pkgplan::package_path::parse("usr/bin/tool"))};
 }
 
-pkgapply::application_journal_record initial_record()
+pkgapply::application_journal_record initial_record(
+    std::uint8_t request_seed = 1,
+    std::uint8_t attempt_seed = 1)
 {
   return pkgapply::application_journal_record::make(
-      header(), pkgapply::application_journal_state::prepared, effects(), {});
+      header(request_seed, attempt_seed),
+      pkgapply::application_journal_state::prepared, effects(), {});
 }
 
 pkgapply::application_journal_record successor_record()
@@ -102,20 +107,30 @@ pkgapply::application_journal_record successor_record()
         graph[0].identity()}});
 }
 
-std::string only_snapshot(const std::string& directory)
+std::vector<std::string> stored_files(const std::string& directory)
 {
   DIR* stream = ::opendir(directory.c_str());
   require(stream != nullptr, "cannot inspect journal-store test directory");
-  std::string result;
+  std::vector<std::string> result;
   while (const auto* entry = ::readdir(stream)) {
     const std::string name = entry->d_name;
-    if (name == "." || name == "..")
-      continue;
-    require(result.empty(), "journal store left more than one snapshot file");
-    result = name;
+    if (name != "." && name != "..")
+      result.push_back(name);
   }
   require(::closedir(stream) == 0, "cannot close journal-store test directory");
-  require(!result.empty(), "journal store did not publish a snapshot file");
+  return result;
+}
+
+std::string journal_snapshot(const std::vector<std::string>& files)
+{
+  std::string result;
+  for (const auto& name : files) {
+    if (name.compare(0, 18, "journal-v1-sha256-") != 0)
+      continue;
+    require(result.empty(), "journal store left multiple journal snapshots");
+    result = name;
+  }
+  require(!result.empty(), "journal store did not publish a journal snapshot");
   return result;
 }
 
@@ -168,8 +183,17 @@ int main()
           "journal store did not retain its duplicated directory descriptor");
   require(!store.load(header(9).identity()),
           "journal store invented an unknown snapshot");
+  const auto active_initial =
+      store.load_active(initial.header().request());
+  require(active_initial && active_initial->identity() == initial.identity(),
+          "journal store did not index the active request journal");
+  require(!store.load_active(header(9).request()),
+          "journal store invented an active journal for an unknown request");
 
-  const auto name = only_snapshot(directory);
+  const auto initial_files = stored_files(directory);
+  require(initial_files.size() == 2U,
+          "journal store did not retain one snapshot and one request index");
+  const auto name = journal_snapshot(initial_files);
   struct stat status {};
   require(::stat((directory + "/" + name).c_str(), &status) == 0,
           "cannot inspect journal snapshot mode");
@@ -180,11 +204,31 @@ int main()
           "journal store changed the successor snapshot");
   require(store.publish(successor).identity() == successor.identity(),
           "journal store did not accept exact idempotent publication");
-  require(only_snapshot(directory) == name,
+  require(stored_files(directory).size() == 2U,
           "journal store left a temporary file after replacement");
   const auto loaded_successor = store.load(successor.header().identity());
   require(loaded_successor && loaded_successor->identity() == successor.identity(),
           "journal store did not replace the current snapshot");
+  const auto active_successor =
+      store.load_active(successor.header().request());
+  require(active_successor &&
+              active_successor->identity() == successor.identity(),
+          "journal store did not advance the active request index");
+
+  const auto second_attempt = initial_record(1, 31);
+  require(second_attempt.header().identity() != initial.header().identity(),
+          "journal-store test did not construct a distinct attempt");
+  require(store.publish(second_attempt).identity() == second_attempt.identity(),
+          "journal store changed a second request attempt");
+  const auto active_second =
+      store.load_active(second_attempt.header().request());
+  require(active_second &&
+              active_second->identity() == second_attempt.identity(),
+          "journal store did not replace the request index with a new attempt");
+  require(store.load(successor.header().identity()) &&
+              store.load(successor.header().identity())->identity() ==
+                  successor.identity(),
+          "journal store removed an older request attempt");
 
   bool rejected = false;
   try {
@@ -200,6 +244,11 @@ int main()
   const auto anchored = store.load(successor.header().identity());
   require(anchored && anchored->identity() == successor.identity(),
           "journal store lost its directory anchor after rename");
+  const auto active_anchored =
+      store.load_active(second_attempt.header().request());
+  require(active_anchored &&
+              active_anchored->identity() == second_attempt.identity(),
+          "journal request index lost its directory anchor after rename");
   const auto duplicated_anchored =
       duplicated.load(successor.header().identity());
   require(duplicated_anchored &&
@@ -227,8 +276,10 @@ int main()
   }
   require(rejected, "journal store accepted corrupt snapshot bytes");
 
-  require(::unlink((moved + "/" + name).c_str()) == 0,
-          "cannot remove journal-store test snapshot");
+  for (const auto& file : stored_files(moved)) {
+    require(::unlink((moved + "/" + file).c_str()) == 0,
+            "cannot remove journal-store test file");
+  }
   require(::unlink(link.c_str()) == 0,
           "cannot remove journal-store test symlink");
   require(::rmdir(moved.c_str()) == 0,

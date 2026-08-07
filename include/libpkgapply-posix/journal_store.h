@@ -126,6 +126,19 @@ public:
   [[nodiscard]] std::optional<application_journal_record> load(
       const application_journal_identity& journal) const;
 
+  /*! \brief Load the journal currently indexed for one application request.
+   *  \param request Exact semantic application-request identity.
+   *  \return Current validated journal, or empty when no attempt is indexed.
+   *  \throws journal_store_error If retained index or journal bytes are
+   *          missing, malformed, or contradict the requested identity.
+   *
+   *  The request index is updated only after the referenced journal snapshot
+   *  is durable. It is a direct restart locator, not a journal scanner or an
+   *  attempt-selection policy.
+   */
+  [[nodiscard]] std::optional<application_journal_record> load_active(
+      const application_request_identity& request) const;
+
 private:
   explicit application_journal_store(int directory_fd) noexcept;
 

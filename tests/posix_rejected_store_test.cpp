@@ -111,16 +111,18 @@ pkgimage::package_entry regular_entry(
 }
 
 pkgimage::package_entry hardlink_entry(
-    std::string path, std::string anchor)
+    std::string path,
+    std::string anchor,
+    const pkgimage::package_entry& regular_anchor)
 {
   pkgimage::package_entry entry(
       pkgimage::package_path::parse(std::move(path)),
       pkgimage::entry_type::hardlink);
-  entry.mode = 0755;
-  entry.uid = 0;
-  entry.gid = 0;
-  entry.mtime = 101;
-  entry.mtime_nanoseconds = 201;
+  entry.mode = regular_anchor.mode;
+  entry.uid = regular_anchor.uid;
+  entry.gid = regular_anchor.gid;
+  entry.mtime = regular_anchor.mtime;
+  entry.mtime_nanoseconds = regular_anchor.mtime_nanoseconds;
   entry.hardlink_target = pkgimage::package_path::parse(std::move(anchor));
   return entry;
 }
@@ -184,8 +186,10 @@ std::vector<pkgimage::package_entry> incoming_entries()
 {
   std::vector<pkgimage::package_entry> entries;
   entries.reserve(4);
-  entries.push_back(regular_entry("usr/bin/tool", "abcd", 0755));
-  entries.push_back(hardlink_entry("usr/bin/tool-hard", "usr/bin/tool"));
+  const auto anchor = regular_entry("usr/bin/tool", "abcd", 0755);
+  entries.push_back(anchor);
+  entries.push_back(
+      hardlink_entry("usr/bin/tool-hard", "usr/bin/tool", anchor));
   entries.push_back(symlink_entry("usr/bin/tool-link", "tool"));
   entries.push_back(character_entry("dev/tool-control"));
   return entries;

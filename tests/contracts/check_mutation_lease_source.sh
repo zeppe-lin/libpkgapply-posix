@@ -31,6 +31,11 @@ fi
 if grep -E '#include <libpkgstate|application_posix_backend|application_target_observer' "$source" "$header" >/dev/null; then
   fail 'lease mechanism absorbed state, backend, or observation authority'
 fi
-for contract in 'posix-mutation-lease-header-test' 'posix-mutation-lease-test'; do
-  grep -F "$contract" "$root/tests/meson.build" >/dev/null || fail "Meson qualification omits $contract"
-done
+grep -F "['mutation-lease', 'mechanism/posix_mutation_lease_test.cpp'" \
+  "$root/tests/meson.build" >/dev/null ||
+  fail 'Meson qualification omits the mutation-lease mechanism case'
+grep -F "'mutation_lease.h'," "$root/tests/meson.build" >/dev/null ||
+  fail 'Meson public-header list omits mutation_lease.h'
+grep -F "test('header-' + header.underscorify(), target, suite: 'header')" \
+  "$root/tests/meson.build" >/dev/null ||
+  fail 'Meson does not register generic standalone headers in the header suite'

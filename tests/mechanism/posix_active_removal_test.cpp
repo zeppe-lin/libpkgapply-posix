@@ -7,6 +7,7 @@
 #include <libpkgapply-posix/target_observer.h>
 
 #include <array>
+#include <atomic>
 #include <cerrno>
 #include <cstdint>
 #include <cstdlib>
@@ -17,9 +18,12 @@
 
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <unistd.h>
 
 namespace {
+
+std::atomic<bool> fail_next_fsync{false};
 
 void
 require(bool condition, std::string_view message)
@@ -135,6 +139,16 @@ absent(const std::string& path)
 
 } // namespace
 
+extern "C" int
+fsync(int descriptor)
+{
+  if (fail_next_fsync.exchange(false, std::memory_order_relaxed)) {
+    errno = EIO;
+    return -1;
+  }
+  return static_cast<int>(::syscall(SYS_fsync, descriptor));
+}
+
 int
 main()
 {
@@ -239,9 +253,13 @@ main()
   require(!absent(root.path() + "/tmp/collision"),
           "workspace collision changed the logical target");
 
+  fail_next_fsync.store(true, std::memory_order_relaxed);
+  require(active.synchronize().status() ==
+              pkgapply::application_durability_status::unconfirmed,
+          "active synchronization failure was not reported as unconfirmed");
   require(active.synchronize().status() ==
               pkgapply::application_durability_status::confirmed,
-          "active removal synchronization was not confirmed");
+          "active removal synchronization could not be retried");
   require(::close(root_descriptor) == 0,
           "cannot close active removal target root");
   return 0;

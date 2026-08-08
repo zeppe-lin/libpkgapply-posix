@@ -1,15 +1,20 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: 2026 Alexandr Savca
+# SPDX-License-Identifier: GPL-3.0-or-later
 set -eu
+
+[ "$#" -ge 1 ] || {
+  echo "usage: $0 SOURCE-ROOT [DEPENDENCY-INCLUDE-ROOT ...]" >&2
+  exit 2
+}
 root=$1
+shift
 fail(){ echo "documentation-contract: $*" >&2; exit 1; }
-apply_include=${2:-}
-image_include=${3:-}
-plan_include=${4:-}
 
 resolve_include()
 {
   package=$1
-  value=$2
+  value=${2:-}
   if [ -n "$value" ]; then
     printf '%s\n' "$value"
     return
@@ -21,20 +26,43 @@ resolve_include()
   pkg-config --variable=includedir "$package"
 }
 
-apply_include=$(resolve_include libpkgapply "$apply_include")
-image_include=$(resolve_include libpkgimage "$image_include")
-plan_include=$(resolve_include libpkgplan "$plan_include")
-for f in README.md CONTRIBUTING.md MAINTAINING.md HISTORY.md docs/architecture.md docs/integration.md docs/testing.md docs/abi.md docs/code-style.md docs/history/libpkgapply-2.3-extraction.md man/libpkgapply-posix.3.scdoc; do [ -s "$root/$f" ] || fail "missing $f"; done
-grep -F 'does not construct package plans' "$root/README.md" >/dev/null || fail 'non-ownership not explicit'
-grep -F 'descriptor-anchored' "$root/docs/architecture.md" >/dev/null || fail 'authority retention not documented'
+packages='libpkgapply
+libpkgbuild-plan
+libpkgplan
+libpkgbuild-image
+libpkgbuild
+libpkgimage
+libpkgsource-plan
+libpkgsource
+libpkgresolve
+libpkgcatalog
+libpkgstate'
+include_roots=
+for package in $packages; do
+  value=${1:-}
+  [ "$#" -eq 0 ] || shift
+  include=$(resolve_include "$package" "$value")
+  include_roots="$include_roots --include-root $include"
+done
+
+for f in README.md CONTRIBUTING.md MAINTAINING.md HISTORY.md \
+  docs/architecture.md docs/integration.md docs/testing.md docs/abi.md \
+  docs/code-style.md docs/history/libpkgapply-2.3-extraction.md \
+  man/libpkgapply-posix.3.scdoc
+do
+  [ -s "$root/$f" ] || fail "missing $f"
+done
+grep -F 'does not construct package plans' "$root/README.md" >/dev/null ||
+  fail 'non-ownership not explicit'
+grep -F 'descriptor-anchored' "$root/docs/architecture.md" >/dev/null ||
+  fail 'authority retention not documented'
 python3 "$root/tools/check-public-documentation.py" \
   "$root" libpkgapply-posix libpkgapply-posix.h
 if command -v clang++ >/dev/null 2>&1; then
+  # shellcheck disable=SC2086
   python3 "$root/tools/check-doxygen-contract.py" \
     --root "$root" --include-subdir libpkgapply-posix \
-    --include-root "$apply_include" \
-    --include-root "$image_include" \
-    --include-root "$plan_include" \
+    $include_roots \
     --namespace pkgapply --clang "$(command -v clang++)"
 fi
 

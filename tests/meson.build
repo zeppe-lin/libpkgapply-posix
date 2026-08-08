@@ -4,21 +4,55 @@
 if get_option('tests').allowed()
   sh = find_program('sh')
   nm = find_program('nm')
+  test_inc = include_directories('.', 'fixtures')
+
+  libpkgbuild_image_test_dep = dependency(
+    'libpkgbuild-image', version: ['>=1.0.0', '<2.0.0'], required: true,
+    static: want_static,
+  )
+  libpkgbuild_plan_test_dep = dependency(
+    'libpkgbuild-plan', version: ['>=1.0.0', '<2.0.0'], required: true,
+    static: want_static,
+  )
+  libpkgbuild_test_dep = dependency(
+    'libpkgbuild', version: ['>=3.0.0', '<4.0.0'], required: true,
+    static: want_static,
+  )
+  libpkgcatalog_test_dep = dependency(
+    'libpkgcatalog', version: ['>=3.0.0', '<4.0.0'], required: true,
+    static: want_static,
+  )
+  libpkgresolve_test_dep = dependency(
+    'libpkgresolve', version: ['>=2.0.0', '<3.0.0'], required: true,
+    static: want_static,
+  )
+  libpkgsource_plan_test_dep = dependency(
+    'libpkgsource-plan', version: ['>=1.0.0', '<2.0.0'], required: true,
+    static: want_static,
+  )
+  libpkgsource_test_dep = dependency(
+    'libpkgsource', version: ['>=3.0.0', '<4.0.0'], required: true,
+    static: want_static,
+  )
+  libpkgstate_test_dep = dependency(
+    'libpkgstate', version: ['>=3.0.0', '<4.0.0'], required: true,
+    static: want_static,
+  )
 
   fixture_test_deps = [
     libpkgapply_posix_dep,
-    dependency('libpkgbuild-image', version: ['>=1.0.0', '<2.0.0'], required: true, static: want_static),
-    dependency('libpkgbuild-plan', version: ['>=1.0.0', '<2.0.0'], required: true, static: want_static),
-    dependency('libpkgcatalog', version: ['>=3.0.0', '<4.0.0'], required: true, static: want_static),
-    dependency('libpkgresolve', version: ['>=2.0.0', '<3.0.0'], required: true, static: want_static),
-    dependency('libpkgstate', version: ['>=3.0.0', '<4.0.0'], required: true, static: want_static),
+    libpkgbuild_image_test_dep,
+    libpkgbuild_plan_test_dep,
+    libpkgcatalog_test_dep,
+    libpkgresolve_test_dep,
+    libpkgstate_test_dep,
   ]
   crypto_test_deps = [libpkgapply_posix_dep, libcrypto_dep]
   fixture_crypto_test_deps = fixture_test_deps + [libcrypto_dep]
 
-  # White-box mechanism tests include non-installed headers from src/.  They
-  # must exercise the private implementation without promoting detail symbols
-  # into the installed shared ABI.
+  # White-box mechanism tests include non-installed headers from src/. They
+  # exercise the private implementation without promoting detail symbols into
+  # the installed shared ABI.
   libpkgapply_posix_internal_test_library = static_library(
     'pkgapply-posix-test-implementation',
     libpkgapply_posix_sources,
@@ -37,286 +71,184 @@ if get_option('tests').allowed()
     libcrypto_dep,
   ]
 
-  version_header_test = executable(
-    'version-header-test',
-    'version_header_test.cpp',
+  error_value_test = executable(
+    'error-value-test',
+    'unit/error_value_test.cpp',
     dependencies: libpkgapply_posix_dep,
+    install: false,
   )
-  test('compile POSIX version header independently', version_header_test)
+  test('error-value', error_value_test, suite: 'unit')
 
+  foreach spec : [
+    ['active-incoming', 'mechanism/posix_active_incoming_test.cpp', internal_crypto_test_deps],
+    ['active-recovery', 'mechanism/posix_active_recovery_test.cpp', internal_crypto_test_deps],
+    ['active-removal', 'mechanism/posix_active_removal_test.cpp', [libpkgapply_posix_internal_test_dep]],
+    ['active-workspace', 'mechanism/posix_active_workspace_test.cpp', [libpkgapply_posix_internal_test_dep]],
+    ['capture-store', 'mechanism/posix_capture_store_test.cpp', [libpkgapply_posix_dep]],
+    ['checkpoint-store', 'mechanism/posix_checkpoint_store_test.cpp', fixture_test_deps],
+    ['completed-evidence-store', 'mechanism/posix_completed_evidence_store_test.cpp', fixture_test_deps],
+    ['journal-store', 'mechanism/posix_journal_store_test.cpp', [libpkgapply_posix_dep]],
+    ['mutation-lease', 'mechanism/posix_mutation_lease_test.cpp', [libpkgapply_posix_dep]],
+    ['payload-stage', 'mechanism/posix_payload_stage_test.cpp', crypto_test_deps],
+    ['rejected-store', 'mechanism/posix_rejected_store_test.cpp', fixture_crypto_test_deps],
+    ['target-observer', 'mechanism/posix_target_observer_test.cpp', [libpkgapply_posix_dep]],
+  ]
+    target = executable(
+      spec[0] + '-test',
+      spec[1],
+      include_directories: test_inc,
+      dependencies: spec[2],
+      install: false,
+    )
+    test(spec[0], target, suite: 'mechanism')
+  endforeach
 
-  posix_active_incoming_test = executable(
-    'posix-active-incoming-test',
-    'posix_active_incoming_test.cpp',
-    dependencies: internal_crypto_test_deps,
-  )
-  test('posix-active-incoming-test', posix_active_incoming_test)
+  foreach spec : [
+    ['backend', 'integration/posix_backend_test.cpp', fixture_test_deps],
+    ['backend-routes', 'integration/posix_backend_routes_test.cpp', fixture_crypto_test_deps],
+    ['durability-failure', 'integration/durability_failure_test.cpp', fixture_test_deps],
+  ]
+    target = executable(
+      spec[0] + '-test',
+      spec[1],
+      include_directories: test_inc,
+      dependencies: spec[2],
+      install: false,
+    )
+    test(spec[0], target, suite: 'integration')
+  endforeach
 
-  posix_active_recovery_test = executable(
-    'posix-active-recovery-test',
-    'posix_active_recovery_test.cpp',
-    dependencies: internal_crypto_test_deps,
-  )
-  test('posix-active-recovery-test', posix_active_recovery_test)
+  public_headers = [
+    'backend.h',
+    'capture_store.h',
+    'checkpoint_store.h',
+    'completed_evidence_store.h',
+    'export.h',
+    'journal_store.h',
+    'libpkgapply-posix.h',
+    'mutation_lease.h',
+    'payload_stage.h',
+    'rejected_store.h',
+    'target_observer.h',
+    'version.h',
+  ]
+  foreach header : public_headers
+    target = executable(
+      'header-' + header.underscorify(),
+      'header/public_header_compile.cpp',
+      cpp_args: [
+        '-DPKGAPPLY_POSIX_TEST_HEADER="libpkgapply-posix/' + header + '"',
+      ],
+      dependencies: libpkgapply_posix_dep,
+      install: false,
+    )
+    test('header-' + header.underscorify(), target, suite: 'header')
+  endforeach
 
-  posix_active_removal_test = executable(
-    'posix-active-removal-test',
-    'posix_active_removal_test.cpp',
-    dependencies: libpkgapply_posix_internal_test_dep,
-  )
-  test('posix-active-removal-test', posix_active_removal_test)
-
-  posix_active_workspace_test = executable(
-    'posix-active-workspace-test',
-    'posix_active_workspace_test.cpp',
-    dependencies: libpkgapply_posix_internal_test_dep,
-  )
-  test('posix-active-workspace-test', posix_active_workspace_test)
-
-  posix_backend_header_test = executable(
-    'posix-backend-header-test',
-    'posix_backend_header_test.cpp',
+  rtti_link_test = executable(
+    'rtti-link-test',
+    'contracts/rtti_link_test.cpp',
     dependencies: libpkgapply_posix_dep,
+    install: false,
   )
-  test('posix-backend-header-test', posix_backend_header_test)
-
-  posix_backend_routes_test = executable(
-    'posix-backend-routes-test',
-    'posix_backend_routes_test.cpp',
-    dependencies: fixture_crypto_test_deps,
-  )
-  test('posix-backend-routes-test', posix_backend_routes_test)
-
-  posix_backend_test = executable(
-    'posix-backend-test',
-    'posix_backend_test.cpp',
-    dependencies: fixture_test_deps,
-  )
-  test('posix-backend-test', posix_backend_test)
-
-  posix_capture_store_header_test = executable(
-    'posix-capture-store-header-test',
-    'posix_capture_store_header_test.cpp',
-    dependencies: libpkgapply_posix_dep,
-  )
-  test('posix-capture-store-header-test', posix_capture_store_header_test)
-
-  posix_capture_store_test = executable(
-    'posix-capture-store-test',
-    'posix_capture_store_test.cpp',
-    dependencies: libpkgapply_posix_dep,
-  )
-  test('posix-capture-store-test', posix_capture_store_test)
-
-  posix_checkpoint_store_header_test = executable(
-    'posix-checkpoint-store-header-test',
-    'posix_checkpoint_store_header_test.cpp',
-    dependencies: libpkgapply_posix_dep,
-  )
-  test('posix-checkpoint-store-header-test', posix_checkpoint_store_header_test)
-
-  posix_checkpoint_store_test = executable(
-    'posix-checkpoint-store-test',
-    'posix_checkpoint_store_test.cpp',
-    dependencies: fixture_test_deps,
-  )
-  test('posix-checkpoint-store-test', posix_checkpoint_store_test)
-
-  posix_completed_evidence_store_header_test = executable(
-    'posix-completed-evidence-store-header-test',
-    'posix_completed_evidence_store_header_test.cpp',
-    dependencies: libpkgapply_posix_dep,
-  )
-  test('posix-completed-evidence-store-header-test', posix_completed_evidence_store_header_test)
-
-  posix_completed_evidence_store_test = executable(
-    'posix-completed-evidence-store-test',
-    'posix_completed_evidence_store_test.cpp',
-    dependencies: fixture_test_deps,
-  )
-  test('posix-completed-evidence-store-test', posix_completed_evidence_store_test)
-
-  posix_journal_store_header_test = executable(
-    'posix-journal-store-header-test',
-    'posix_journal_store_header_test.cpp',
-    dependencies: libpkgapply_posix_dep,
-  )
-  test('posix-journal-store-header-test', posix_journal_store_header_test)
-
-  posix_journal_store_test = executable(
-    'posix-journal-store-test',
-    'posix_journal_store_test.cpp',
-    dependencies: libpkgapply_posix_dep,
-  )
-  test('posix-journal-store-test', posix_journal_store_test)
-
-  posix_mutation_lease_header_test = executable(
-    'posix-mutation-lease-header-test',
-    'posix_mutation_lease_header_test.cpp',
-    dependencies: libpkgapply_posix_dep,
-  )
-  test('posix-mutation-lease-header-test', posix_mutation_lease_header_test)
-
-  posix_mutation_lease_test = executable(
-    'posix-mutation-lease-test',
-    'posix_mutation_lease_test.cpp',
-    dependencies: libpkgapply_posix_dep,
-  )
-  test('posix-mutation-lease-test', posix_mutation_lease_test)
-
-  posix_payload_stage_header_test = executable(
-    'posix-payload-stage-header-test',
-    'posix_payload_stage_header_test.cpp',
-    dependencies: libpkgapply_posix_dep,
-  )
-  test('posix-payload-stage-header-test', posix_payload_stage_header_test)
-
-  posix_payload_stage_test = executable(
-    'posix-payload-stage-test',
-    'posix_payload_stage_test.cpp',
-    dependencies: crypto_test_deps,
-  )
-  test('posix-payload-stage-test', posix_payload_stage_test)
-
-  posix_public_header_test = executable(
-    'posix-public-header-test',
-    'posix_public_header_test.cpp',
-    dependencies: libpkgapply_posix_dep,
-  )
-  test('posix-public-header-test', posix_public_header_test)
-
-  posix_rtti_link_test = executable(
-    'posix-rtti-link-test',
-    'posix_rtti_link_test.cpp',
-    dependencies: libpkgapply_posix_dep,
-  )
-  test('posix-rtti-link-test', posix_rtti_link_test)
-
-  posix_rejected_store_header_test = executable(
-    'posix-rejected-store-header-test',
-    'posix_rejected_store_header_test.cpp',
-    dependencies: libpkgapply_posix_dep,
-  )
-  test('posix-rejected-store-header-test', posix_rejected_store_header_test)
-
-  posix_rejected_store_test = executable(
-    'posix-rejected-store-test',
-    'posix_rejected_store_test.cpp',
-    dependencies: fixture_crypto_test_deps,
-  )
-  test('posix-rejected-store-test', posix_rejected_store_test)
-
-  posix_target_observer_header_test = executable(
-    'posix-target-observer-header-test',
-    'posix_target_observer_header_test.cpp',
-    dependencies: libpkgapply_posix_dep,
-  )
-  test('posix-target-observer-header-test', posix_target_observer_header_test)
-
-  posix_target_observer_test = executable(
-    'posix-target-observer-test',
-    'posix_target_observer_test.cpp',
-    dependencies: libpkgapply_posix_dep,
-  )
-  test('posix-target-observer-test', posix_target_observer_test)
-
+  test('rtti-link', rtti_link_test, suite: 'contract')
 
   if library_kind == 'shared'
     test(
-      'verify reviewed POSIX ABI surface',
+      'abi-surface',
       sh,
       args: [
-        join_paths(meson.current_source_dir(), 'check_abi_surface.sh'),
+        meson.current_source_dir() / 'contracts/check_abi_surface.sh',
         nm.full_path(),
         libpkgapply_posix.full_path(),
-        join_paths(meson.project_source_root(), 'abi/libpkgapply-posix.exports'),
+        meson.project_source_root() / 'abi/libpkgapply-posix.exports',
       ],
+      suite: 'contract',
     )
   endif
 
   test(
-    'verify pkg-config metadata',
+    'pkgconfig-metadata',
     sh,
     args: [
-      join_paths(meson.current_source_dir(), 'pkgconfig_metadata_test.sh'),
+      meson.current_source_dir() / 'contracts/check_pkgconfig_metadata.sh',
       meson.project_build_root(),
     ],
+    suite: 'contract',
   )
-
   test(
-    'verify POSIX mutation lease source contract',
+    'mutation-lease-source',
     sh,
     args: [
-      join_paths(meson.current_source_dir(), 'posix_mutation_lease_source_test.sh'),
+      meson.current_source_dir() / 'contracts/check_mutation_lease_source.sh',
       meson.project_source_root(),
     ],
+    suite: 'contract',
   )
+
+  foreach contract : [
+    'architecture_contract',
+    'abi_contract',
+    'ci_contract',
+    'extraction_contract',
+    'release_contract',
+    'repository_contract',
+    'test_topology_contract',
+  ]
+    test(
+      contract.replace('_', '-'),
+      sh,
+      args: [
+        meson.current_source_dir() / ('contracts/check_' + contract + '.sh'),
+        meson.project_source_root(),
+      ],
+      suite: 'contract',
+    )
+  endforeach
+
+  # The Doxygen parser compiles installed public headers in isolation. Pass the
+  # complete transitive public include closure explicitly so qualification
+  # cannot borrow zoo headers from one ambient installation prefix.
+  libpkgapply_public_include = libpkgapply_dep.get_variable(pkgconfig: 'includedir')
+  libpkgbuild_plan_public_include = libpkgbuild_plan_test_dep.get_variable(pkgconfig: 'includedir')
+  libpkgplan_public_include = libpkgplan_dep.get_variable(pkgconfig: 'includedir')
+  libpkgbuild_image_public_include = libpkgbuild_image_test_dep.get_variable(pkgconfig: 'includedir')
+  libpkgbuild_public_include = libpkgbuild_test_dep.get_variable(pkgconfig: 'includedir')
+  libpkgimage_public_include = libpkgimage_dep.get_variable(pkgconfig: 'includedir')
+  libpkgsource_plan_public_include = libpkgsource_plan_test_dep.get_variable(pkgconfig: 'includedir')
+  libpkgsource_public_include = libpkgsource_test_dep.get_variable(pkgconfig: 'includedir')
+  libpkgresolve_public_include = libpkgresolve_test_dep.get_variable(pkgconfig: 'includedir')
+  libpkgcatalog_public_include = libpkgcatalog_test_dep.get_variable(pkgconfig: 'includedir')
+  libpkgstate_public_include = libpkgstate_test_dep.get_variable(pkgconfig: 'includedir')
   test(
-    'contract architecture-contract',
-    sh,
-    args: [join_paths(meson.current_source_dir(), 'contracts/check_architecture_contract.sh'), meson.project_source_root()],
-  )
-  test(
-    'contract abi-contract',
-    sh,
-    args: [join_paths(meson.current_source_dir(), 'contracts/check_abi_contract.sh'), meson.project_source_root()],
-  )
-  test(
-    'contract ci-contract',
-    sh,
-    args: [join_paths(meson.current_source_dir(), 'contracts/check_ci_contract.sh'), meson.project_source_root()],
-  )
-  libpkgapply_public_include = libpkgapply_dep.get_variable(
-    pkgconfig: 'includedir',
-  )
-  libpkgimage_public_include = libpkgimage_dep.get_variable(
-    pkgconfig: 'includedir',
-  )
-  libpkgplan_public_include = libpkgplan_dep.get_variable(
-    pkgconfig: 'includedir',
-  )
-  test(
-    'contract documentation-contract',
+    'documentation-contract',
     sh,
     args: [
-      join_paths(meson.current_source_dir(), 'contracts/check_documentation_contract.sh'),
+      meson.current_source_dir() / 'contracts/check_documentation_contract.sh',
       meson.project_source_root(),
       libpkgapply_public_include,
-      libpkgimage_public_include,
+      libpkgbuild_plan_public_include,
       libpkgplan_public_include,
+      libpkgbuild_image_public_include,
+      libpkgbuild_public_include,
+      libpkgimage_public_include,
+      libpkgsource_plan_public_include,
+      libpkgsource_public_include,
+      libpkgresolve_public_include,
+      libpkgcatalog_public_include,
+      libpkgstate_public_include,
     ],
+    suite: 'contract',
   )
+
   test(
-    'contract extraction-contract',
-    sh,
-    args: [join_paths(meson.current_source_dir(), 'contracts/check_extraction_contract.sh'), meson.project_source_root()],
-  )
-  test(
-    'contract release-contract',
-    sh,
-    args: [join_paths(meson.current_source_dir(), 'contracts/check_release_contract.sh'), meson.project_source_root()],
-  )
-  test(
-    'contract repository-contract',
-    sh,
-    args: [join_paths(meson.current_source_dir(), 'contracts/check_repository_contract.sh'), meson.project_source_root()],
-  )
-  test(
-    'contract style-contract',
+    'style-contract',
     sh,
     args: [
-      join_paths(meson.current_source_dir(), 'contracts/check_style_contract.sh'),
+      meson.current_source_dir() / 'contracts/check_style_contract.sh',
       meson.project_source_root(),
       meson.project_build_root(),
     ],
+    suite: 'contract',
   )
-  test(
-    'contract test-topology-contract',
-    sh,
-    args: [
-      join_paths(meson.current_source_dir(), 'contracts/check_test_topology_contract.sh'),
-      meson.project_source_root(),
-    ],
-  )
-
 endif

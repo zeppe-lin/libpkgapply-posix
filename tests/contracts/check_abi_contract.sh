@@ -17,7 +17,7 @@ fail()
 
 manifest=$root/abi/libpkgapply-posix.exports
 generator=$root/tools/generate-elf-export-script.sh
-surface_test=$root/tests/check_abi_surface.sh
+surface_test=$root/tests/contracts/check_abi_surface.sh
 
 [ -s "$manifest" ] || fail 'reviewed ELF ABI manifest is missing or empty'
 [ -x "$generator" ] || fail 'ELF export-script generator is absent'
@@ -31,11 +31,14 @@ grep -F 'PKGAPPLY_POSIX_BUILDING_LIBRARY' "$root/src/meson.build" >/dev/null ||
   fail 'library export mode is absent'
 grep -F 'generate-elf-export-script.sh' "$root/src/meson.build" >/dev/null ||
   fail 'reviewed ABI manifest is not converted into the linker script'
-grep -F 'verify reviewed POSIX ABI surface' "$root/tests/meson.build" >/dev/null ||
+grep -F "'abi-surface'," "$root/tests/meson.build" >/dev/null ||
   fail 'built shared-library ABI is not audited'
 
-grep -F 'posix-rtti-link-test' "$root/tests/meson.build" >/dev/null ||
+grep -F "'rtti-link-test'," "$root/tests/meson.build" >/dev/null ||
   fail 'public RTTI link consumer is not registered'
+grep -F "test('rtti-link', rtti_link_test, suite: 'contract')" \
+  "$root/tests/meson.build" >/dev/null ||
+  fail 'public RTTI link consumer is not in the contract suite'
 
 if grep -Ev '^_Z[A-Za-z0-9_]+$' "$manifest" >/dev/null; then
   fail 'ABI manifest contains a wildcard or invalid symbol'

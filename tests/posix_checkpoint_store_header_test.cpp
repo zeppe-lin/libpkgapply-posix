@@ -1,9 +1,0 @@
-// SPDX-FileCopyrightText: 2026 Alexandr Savca
-// SPDX-License-Identifier: GPL-3.0-or-later
-
-#include <libpkgapply-posix/checkpoint_store.h>
-
-int main()
-{
-  return 0;
-}

@@ -26,7 +26,7 @@ for file in \
 do
   [ -s "$root/$file" ] || fail "missing $file"
 done
-for script in "$root"/ci/*.sh "$root"/tests/contracts/*.sh "$root"/tests/*.sh; do
+for script in "$root"/ci/*.sh "$root"/tests/contracts/*.sh; do
   sh -n "$script" || fail "invalid shell: ${script#"$root"/}"
 done
 for token in \

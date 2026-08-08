@@ -293,8 +293,12 @@ Each virtual operation delegates to exactly one mechanism and retains the
 returned physical fact in transaction state. `synchronize(domain)` has an
 explicit routing table for all six durability domains; it does not flush an
 unrelated store or infer confirmation from an earlier rename, link, or journal
-write. Backend exceptions preserve whether publication or replacement may
-already be visible so the core can classify uncertainty truthfully.
+write. A synchronization syscall failure in an otherwise admitted domain is
+returned as `unconfirmed` durability so the semantic engine retains the failed
+persistence attempt in its receipt. Corruption, binding, and authority failures
+remain mechanism exceptions rather than being laundered into durability facts.
+Backend exceptions preserve whether publication or replacement may already be
+visible so the core can classify other uncertainty truthfully.
 
 `publish_journal()` is also the restart publication barrier. Before a journal
 snapshot that depends on new mechanism facts becomes durable current truth,

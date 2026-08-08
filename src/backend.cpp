@@ -703,22 +703,51 @@ public:
         application_durability_status::confirmed;
     switch (domain) {
       case application_durability_domain::journal:
-        if (!current_journal_)
+        if (!current_journal_) {
           status = application_durability_status::not_attempted;
-        else
-          current_journal_ = journal_store_.publish(*current_journal_);
+        } else {
+          try {
+            current_journal_ = journal_store_.publish(*current_journal_);
+          } catch (const journal_store_error& error) {
+            if (error.code() !=
+                    journal_store_error_code::snapshot_sync_failed &&
+                error.code() !=
+                    journal_store_error_code::directory_sync_failed) {
+              throw;
+            }
+            status = application_durability_status::unconfirmed;
+          }
+        }
         break;
       case application_durability_domain::incoming_staging:
-        if (!incoming_payload_result_)
+        if (!incoming_payload_result_) {
           status = application_durability_status::not_attempted;
-        else
-          payload_store_.synchronize();
+        } else {
+          try {
+            payload_store_.synchronize();
+          } catch (const payload_stage_error& error) {
+            if (error.code() !=
+                payload_stage_error_code::stage_sync_failed) {
+              throw;
+            }
+            status = application_durability_status::unconfirmed;
+          }
+        }
         break;
       case application_durability_domain::recovery_staging:
-        if (captures_.empty())
+        if (captures_.empty()) {
           status = application_durability_status::not_attempted;
-        else
-          capture_store_.synchronize(attempt_);
+        } else {
+          try {
+            capture_store_.synchronize(attempt_);
+          } catch (const capture_store_error& error) {
+            if (error.code() !=
+                capture_store_error_code::namespace_sync_failed) {
+              throw;
+            }
+            status = application_durability_status::unconfirmed;
+          }
+        }
         break;
       case application_durability_domain::active_namespace:
         if (!active_namespace_)
@@ -727,16 +756,34 @@ public:
           status = active_namespace_->synchronize().status();
         break;
       case application_durability_domain::rejected_object_store:
-        if (rejected_effects_.empty())
+        if (rejected_effects_.empty()) {
           status = application_durability_status::not_attempted;
-        else
-          rejected_store_.synchronize(attempt_);
+        } else {
+          try {
+            rejected_store_.synchronize(attempt_);
+          } catch (const rejected_store_error& error) {
+            if (error.code() !=
+                rejected_store_error_code::namespace_sync_failed) {
+              throw;
+            }
+            status = application_durability_status::unconfirmed;
+          }
+        }
         break;
       case application_durability_domain::completed_evidence:
-        if (!completed_evidence_)
+        if (!completed_evidence_) {
           status = application_durability_status::not_attempted;
-        else
-          completed_store_.synchronize();
+        } else {
+          try {
+            completed_store_.synchronize();
+          } catch (const completed_evidence_store_error& error) {
+            if (error.code() !=
+                completed_evidence_store_error_code::namespace_sync_failed) {
+              throw;
+            }
+            status = application_durability_status::unconfirmed;
+          }
+        }
         break;
     }
     durability_[durability_index(domain)] = status;

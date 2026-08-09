@@ -4,6 +4,7 @@
 #include "plan_fixture.h"
 
 #include <libpkgapply-posix/backend.h>
+#include <libpkgapply-posix/target_observer.h>
 #include <libpkgapply/apply.h>
 
 #include <array>
@@ -122,6 +123,16 @@ void write_file(const std::string& path, std::string_view bytes, mode_t mode)
   }
   require(::close(descriptor) == 0,
           "cannot close backend route-test file");
+}
+
+void set_mtime(const std::string& path, time_t seconds)
+{
+  const struct timespec times[2] = {
+      {0, UTIME_OMIT},
+      {seconds, 0},
+  };
+  require(::utimensat(AT_FDCWD, path.c_str(), times, 0) == 0,
+          "cannot set backend route-test directory mtime");
 }
 
 std::string read_file(const std::string& path)
@@ -344,6 +355,13 @@ private:
   std::string target_path_;
   std::unique_ptr<pkgapply::posix::application_posix_backend> backend_;
 };
+
+bool same_observation(const pkgapply::application_path_observation& lhs,
+                      const pkgapply::application_path_observation& rhs)
+{
+  return lhs.path() == rhs.path() && lhs.state() == rhs.state() &&
+      lhs.object() == rhs.object();
+}
 
 const pkgapply::application_path_consequence&
 consequence(const pkgapply::application_receipt& receipt,
@@ -579,6 +597,74 @@ void test_regular_removal_with_capture()
           "regular removal did not confirm recovery, active, and rejected durability");
 }
 
+void test_nested_removal_completes_after_descendant_mutation()
+{
+  backend_layout layout("nested-removal", 150);
+  make_directory(layout.target_path() + "/usr", 0755);
+  make_directory(layout.target_path() + "/usr/bin", 0755);
+  write_file(layout.target_path() + "/usr/bin/tool", "old!", 0644);
+  set_mtime(layout.target_path() + "/usr/bin", 100);
+  set_mtime(layout.target_path() + "/usr", 101);
+
+  const auto authorities =
+      pkgapply::test::fixture::planning_authorities(layout.target().target());
+  const auto usr = pkgplan::package_path::parse("usr");
+  const auto bin = pkgplan::package_path::parse("usr/bin");
+  const auto tool = pkgplan::package_path::parse("usr/bin/tool");
+  const pkgplan::filesystem_object_metadata directory_metadata(
+      pkgplan::filesystem_object_kind::directory,
+      0755,
+      static_cast<std::uint64_t>(::getuid()),
+      static_cast<std::uint64_t>(::getgid()));
+  const pkgplan::filesystem_object_metadata file_metadata(
+      pkgplan::filesystem_object_kind::regular,
+      0644,
+      static_cast<std::uint64_t>(::getuid()),
+      static_cast<std::uint64_t>(::getgid()));
+  const auto plan = pkgapply::test::fixture::removal_plan(
+      authorities,
+      {pkgplan::installed_ownership_claim(
+           usr, authorities.installed_package, directory_metadata),
+       pkgplan::installed_ownership_claim(
+           bin, authorities.installed_package, directory_metadata),
+       pkgplan::installed_ownership_claim(
+           tool, authorities.installed_package, file_metadata)},
+      {pkgplan::target_path_observation::present(
+           pkgplan::filesystem_object_fact(usr, directory_metadata)),
+       pkgplan::target_path_observation::present(
+           pkgplan::filesystem_object_fact(bin, directory_metadata)),
+       pkgplan::target_path_observation::present(
+           pkgplan::filesystem_object_fact(tool, file_metadata))});
+  const auto request = pkgapply::removal_application_request::make(
+      plan, layout.target(), execution_control());
+  fake_lease lease(
+      application_identity<pkgapply::mutation_lease_instance_identity>(170),
+      layout.target().identity(), layout.target().mutation_exclusion_domain());
+  const auto state = state_projection(lease, plan.preconditions(), 171);
+
+  const auto receipt = pkgapply::apply(
+      request, state, lease, layout.backend());
+  require(receipt.outcome() == pkgapply::application_attempt_outcome::completed,
+          "POSIX backend did not complete nested removal");
+  struct stat status {};
+  require(::lstat((layout.target_path() + "/usr/bin/tool").c_str(), &status) != 0 &&
+              errno == ENOENT,
+          "nested removal retained the selected file");
+  require(consequence(receipt, tool).active_status() ==
+              pkgapply::application_effect_status::completed,
+          "nested file removal did not retain completed evidence");
+
+  auto observer =
+      pkgapply::posix::application_target_observer::open(layout.target_path());
+  const auto final = observer.observe({usr, bin, tool});
+  for (const auto& path : {usr, bin, tool}) {
+    const auto* observed = final.find(path);
+    require(observed != nullptr &&
+                same_observation(*observed, consequence(receipt, path).after()),
+            "terminal cleanup stale-dated nested removal evidence");
+  }
+}
+
 } // namespace
 
 int main()
@@ -587,5 +673,6 @@ int main()
   test_nested_install_finalizes_directory_metadata();
   test_incoming_rejected_stage();
   test_regular_removal_with_capture();
+  test_nested_removal_completes_after_descendant_mutation();
   return 0;
 }

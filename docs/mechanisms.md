@@ -160,7 +160,13 @@ that impossible-image invariant canonical; until then the backend preflight
 must refuse it before active mutation.
 
 `remove_observed` is non-recursive. `remove_directory_if_empty` maps a proven
-non-empty result to `conditional_retained`. Unexpected absence, type change, or
+non-empty result to `conditional_retained`. A completed child publication or
+removal can itself change metadata on an admitted ancestor directory. Before
+reporting that child effect completed, the POSIX mechanism re-establishes the
+selected admitted or incoming metadata for affected ancestor directories and
+retains any changed directory descriptor for active-namespace synchronization.
+It does not reinterpret provider-caused metadata drift as fresh caller
+authority. Unexpected absence, type change, ownership or mode change, or other
 race after admission is indeterminate unless the mechanism can prove that its
 own command established the final state.
 

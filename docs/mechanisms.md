@@ -160,15 +160,24 @@ that impossible-image invariant canonical; until then the backend preflight
 must refuse it before active mutation.
 
 `remove_observed` is non-recursive. `remove_directory_if_empty` maps a proven
-non-empty result to `conditional_retained`. A completed child publication or
-removal can itself change metadata on an admitted ancestor directory. Before
-reporting that child effect completed, the POSIX mechanism re-establishes the
-selected admitted or incoming metadata for affected ancestor directories and
-retains any changed directory descriptor for active-namespace synchronization.
-It does not reinterpret provider-caused metadata drift as fresh caller
-authority. Unexpected absence, type change, ownership or mode change, or other
-race after admission is indeterminate unless the mechanism can prove that its
-own command established the final state.
+logically non-empty result to `conditional_retained`. A completed captured
+descendant removal can leave an attempt-bound displaced-old name inside its
+parent. That provider-owned recovery workspace is not application-visible
+content: an ancestor directory may be displaced when every remaining entry is
+the exact deterministic displaced name of an already-completed, captured
+direct-child removal from the same attempt. Arbitrary hidden names, prefix
+matches, unexpected object kinds, and unresolved directory reads remain
+logical content or indeterminate authority; they are never ignored as recovery
+workspace.
+
+A completed child publication or removal can itself change metadata on an
+admitted ancestor directory. Before reporting that child effect completed, the
+POSIX mechanism re-establishes the selected admitted or incoming metadata for
+affected ancestor directories and retains any changed directory descriptor for
+active-namespace synchronization. It does not reinterpret provider-caused
+metadata drift as fresh caller authority. Unexpected absence, type change,
+ownership or mode change, or other race after admission is indeterminate unless
+the mechanism can prove that its own command established the final state.
 
 Recovery is selected and ordered by the core. The POSIX transaction restores
 one path from deterministic workspace facts and the exact admitted prior-state
@@ -194,13 +203,24 @@ issued a second time.
 The reference implementation is a private, non-installed active-namespace
 session rather than a second public executor. It binds image, payload,
 observation, capture, target-root, and attempt authorities once. Existing
-non-directory objects with recovery authority are displaced before replacement
-or removal, preserving hard-link groups as physical old-object authority.
+objects with recovery authority are displaced before replacement or removal,
+preserving hard-link groups as physical old-object authority. When a captured
+directory is removed after captured descendants, its displaced directory may
+carry those exact descendant sidecars as one hierarchical recovery tree.
+Reverse recovery restores the parent first and then consumes descendant
+workspace through the restored logical path. A reopened transaction may retain
+a completed descendant removal when an already-removed ancestor makes that
+descendant path structurally absent.
+
 Recovery consumes deterministic workspace truth first, then exact capture
 material. Missing or contradictory authority reports `indeterminate`. After a
-terminal application journal is durable, the complete transaction may discard
-only displaced old leaves belonging to that attempt; unresolved workspace state
-is never garbage-collected as though it were committed.
+terminal application journal is durable, the complete transaction may discard a
+hierarchical recovery tree only after recursively validating every entry as the
+exact displaced name and object kind of an already-completed, captured removal
+from that attempt. Unknown entries refuse cleanup before recursive deletion.
+Once an ancestor recovery tree has been discarded, descendant cleanup is
+idempotently covered by that ancestor. Unresolved workspace state is never
+garbage-collected as though it were committed.
 
 The session records completed in-process effect paths for recovery. Durable
 restart reconstruction of that effect prefix remains the responsibility of the

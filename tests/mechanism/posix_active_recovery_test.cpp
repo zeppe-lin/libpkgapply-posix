@@ -280,6 +280,14 @@ remove_object(std::string_view path)
       pkgplan::planned_active_outcome::remove_observed);
 }
 
+pkgapply::backend_active_effect_request
+remove_directory(std::string_view path)
+{
+  return pkgapply::backend_active_effect_request::make(
+      pkgplan::package_path::parse(path),
+      pkgplan::planned_active_outcome::remove_directory_if_empty);
+}
+
 bool
 absent(const std::string& path)
 {
@@ -418,6 +426,182 @@ test_fresh_nested_recovery()
           "cannot close nested recovery target root");
 }
 
+void
+test_nested_captured_removal_recovery()
+{
+  temporary_directory target("libpkgapply-nested-captured-removal");
+  temporary_directory capture_root("libpkgapply-nested-captured-capture");
+  make_directory(target.path() + "/usr");
+  make_directory(target.path() + "/usr/bin");
+  write_file(target.path() + "/usr/bin/tool", "old-tool", 0644);
+
+  const std::vector<pkgplan::package_path> paths = {
+      pkgplan::package_path::parse("usr"),
+      pkgplan::package_path::parse("usr/bin"),
+      pkgplan::package_path::parse("usr/bin/tool"),
+  };
+  auto observer =
+      pkgapply::posix::application_target_observer::open(target.path());
+  const auto before = observer.observe(paths).observations();
+  const auto active_attempt = attempt(28);
+  auto capture_store = pkgapply::posix::application_capture_store::open(
+      capture_root.path(), target.path());
+
+  const auto load_all = [&]() {
+    std::vector<pkgapply::posix::captured_old_object> captures;
+    for (const auto& path : paths) {
+      const pkgapply::old_object_capture_request request(path, false, true);
+      auto loaded = capture_store.load(
+          active_attempt, request, observation(before, path.string()));
+      require(loaded.has_value(),
+              "nested captured removal authority was not reloadable");
+      captures.push_back(std::move(*loaded));
+    }
+    return captures;
+  };
+
+  for (const auto& path : paths) {
+    const pkgapply::old_object_capture_request request(path, false, true);
+    const auto result = capture_store.capture(
+        active_attempt, request, observation(before, path.string()));
+    require(result.outcome() ==
+                pkgapply::backend_operation_outcome::completed,
+            "nested captured removal capture did not complete");
+  }
+  capture_store.synchronize(active_attempt);
+
+  const int root_descriptor = ::open(
+      target.path().c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+  require(root_descriptor >= 0,
+          "cannot open nested captured removal target root");
+  {
+    auto active =
+        pkgapply::posix::detail::application_active_namespace::
+            bind_without_incoming(
+                root_descriptor, active_attempt, before, load_all());
+    require(active.remove(remove_object("usr/bin/tool")).outcome() ==
+                pkgapply::backend_operation_outcome::completed,
+            "nested captured leaf removal did not complete");
+    require(active.remove(remove_directory("usr/bin")).outcome() ==
+                pkgapply::backend_operation_outcome::completed,
+            "recovery sidecar made child directory logically non-empty");
+    require(active.remove(remove_directory("usr")).outcome() ==
+                pkgapply::backend_operation_outcome::completed,
+            "nested recovery workspace made parent directory logically non-empty");
+    require(absent(target.path() + "/usr"),
+            "nested captured removal retained the logical directory tree");
+  }
+
+  auto restarted =
+      pkgapply::posix::detail::application_active_namespace::
+          bind_without_incoming(
+              root_descriptor, active_attempt, before, load_all());
+  const pkgapply::backend_operation_result completed(
+      pkgapply::backend_operation_outcome::completed);
+  restarted.retain_completed_effect(remove_object("usr/bin/tool"), completed);
+  restarted.retain_completed_effect(remove_directory("usr/bin"), completed);
+  restarted.retain_completed_effect(remove_directory("usr"), completed);
+
+  require(restarted.recover(pkgplan::package_path::parse("usr")).outcome() ==
+              pkgapply::backend_operation_outcome::completed,
+          "nested captured recovery did not restore parent directory");
+  require(restarted.recover(
+              pkgplan::package_path::parse("usr/bin")).outcome() ==
+              pkgapply::backend_operation_outcome::completed,
+          "nested captured recovery did not restore child directory");
+  require(restarted.recover(
+              pkgplan::package_path::parse("usr/bin/tool")).outcome() ==
+              pkgapply::backend_operation_outcome::completed &&
+              read_file(target.path() + "/usr/bin/tool") == "old-tool",
+          "nested captured recovery did not restore descendant bytes");
+  require(::close(root_descriptor) == 0,
+          "cannot close nested captured removal target root");
+}
+
+
+void
+test_terminal_cleanup_validates_nested_recovery_tree()
+{
+  temporary_directory target("libpkgapply-nested-terminal-cleanup");
+  temporary_directory capture_root("libpkgapply-nested-terminal-capture");
+  make_directory(target.path() + "/usr");
+  write_file(target.path() + "/usr/tool", "old-tool", 0644);
+
+  const std::vector<pkgplan::package_path> paths = {
+      pkgplan::package_path::parse("usr"),
+      pkgplan::package_path::parse("usr/tool"),
+  };
+  auto observer =
+      pkgapply::posix::application_target_observer::open(target.path());
+  const auto before = observer.observe(paths).observations();
+  const auto active_attempt = attempt(32);
+  auto capture_store = pkgapply::posix::application_capture_store::open(
+      capture_root.path(), target.path());
+  std::vector<pkgapply::posix::captured_old_object> captures;
+  for (const auto& path : paths) {
+    const pkgapply::old_object_capture_request request(path, false, true);
+    load_capture(
+        capture_store, active_attempt, request,
+        observation(before, path.string()), captures);
+  }
+  capture_store.synchronize(active_attempt);
+
+  const int root_descriptor = ::open(
+      target.path().c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+  require(root_descriptor >= 0,
+          "cannot open nested terminal-cleanup target root");
+  auto active =
+      pkgapply::posix::detail::application_active_namespace::
+          bind_without_incoming(
+              root_descriptor, active_attempt, before, std::move(captures));
+  require(active.remove(remove_object("usr/tool")).outcome() ==
+              pkgapply::backend_operation_outcome::completed &&
+              active.remove(remove_directory("usr")).outcome() ==
+              pkgapply::backend_operation_outcome::completed,
+          "nested terminal-cleanup fixture did not remove logical tree");
+
+  auto roots =
+      pkgapply::posix::detail::application_active_workspace::
+          from_directory_fd(root_descriptor, active_attempt);
+  auto usr_workspace = roots.open(pkgplan::package_path::parse("usr"));
+  const int displaced = ::openat(
+      usr_workspace.parent_descriptor(), usr_workspace.displaced_name().c_str(),
+      O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+  require(displaced >= 0,
+          "cannot open displaced nested terminal-cleanup tree");
+  const int foreign = ::openat(
+      displaced, "foreign", O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+  require(foreign >= 0 && ::close(foreign) == 0,
+          "cannot inject foreign nested terminal-cleanup entry");
+
+  require(active.discard_recovery(
+              pkgplan::package_path::parse("usr")).outcome() ==
+              pkgapply::backend_operation_outcome::indeterminate,
+          "terminal cleanup recursively deleted unowned target content");
+  struct stat retained {};
+  require(::fstatat(displaced, "foreign", &retained, AT_SYMLINK_NOFOLLOW) == 0,
+          "terminal cleanup partially deleted unowned target content");
+
+  require(::unlinkat(displaced, "foreign", 0) == 0,
+          "cannot remove terminal-cleanup adversarial entry");
+  require(active.discard_recovery(
+              pkgplan::package_path::parse("usr")).outcome() ==
+              pkgapply::backend_operation_outcome::completed,
+          "validated nested recovery tree was not discarded");
+  require(active.discard_recovery(
+              pkgplan::package_path::parse("usr/tool")).outcome() ==
+              pkgapply::backend_operation_outcome::completed,
+          "ancestor terminal cleanup was not idempotent for descendant authority");
+  require(::close(displaced) == 0,
+          "cannot close displaced terminal-cleanup tree");
+  require(roots.open(pkgplan::package_path::parse("usr")).inspect().state() ==
+              pkgapply::posix::detail::active_workspace_state::clear &&
+              absent(target.path() + "/usr"),
+          "terminal cleanup retained nested recovery workspace");
+  require(::close(root_descriptor) == 0,
+          "cannot close nested terminal-cleanup target root");
+}
+
 } // namespace
 
 int
@@ -425,6 +609,8 @@ main()
 {
   test_completed_directory_restart_tolerates_descendant_mtime();
   test_fresh_nested_recovery();
+  test_nested_captured_removal_recovery();
+  test_terminal_cleanup_validates_nested_recovery_tree();
 
   temporary_directory target("libpkgapply-active-recovery");
   temporary_directory payload_root("libpkgapply-recovery-payload");

@@ -647,12 +647,18 @@ void test_nested_removal_completes_after_descendant_mutation()
   require(receipt.outcome() == pkgapply::application_attempt_outcome::completed,
           "POSIX backend did not complete nested removal");
   struct stat status {};
-  require(::lstat((layout.target_path() + "/usr/bin/tool").c_str(), &status) != 0 &&
+  require(::lstat((layout.target_path() + "/usr").c_str(), &status) != 0 &&
+              errno == ENOENT &&
+              ::lstat((layout.target_path() + "/usr/bin").c_str(), &status) != 0 &&
+              errno == ENOENT &&
+              ::lstat((layout.target_path() + "/usr/bin/tool").c_str(), &status) != 0 &&
               errno == ENOENT,
-          "nested removal retained the selected file");
-  require(consequence(receipt, tool).active_status() ==
-              pkgapply::application_effect_status::completed,
-          "nested file removal did not retain completed evidence");
+          "provider recovery artifacts prevented requested directory cleanup");
+  for (const auto& path : {usr, bin, tool}) {
+    require(consequence(receipt, path).active_status() ==
+                pkgapply::application_effect_status::completed,
+            "nested removal did not retain completed active evidence");
+  }
 
   auto observer =
       pkgapply::posix::application_target_observer::open(layout.target_path());

@@ -124,9 +124,18 @@ Removal and recovery tests must prove:
 
 * `remove_observed` never performs recursive deletion;
 * only `remove_directory_if_empty` may return `conditional_retained`;
-* a non-empty cleanup directory remains unchanged;
+* a logically non-empty cleanup directory remains unchanged, while exact
+  same-attempt recovery sidecars do not turn an otherwise empty owned directory
+  into `conditional_retained`;
+* arbitrary workspace-like names and wrong-kind sidecars are never ignored as
+  provider-owned recovery authority;
 * descendant mutation does not stale admitted ancestor-directory authority,
   including after active-session rebind and terminal workspace cleanup;
+* nested captured removal can survive rebind, recover parent-to-child from the
+  hierarchical displaced tree, and retain exact descendant bytes;
+* terminal cleanup recursively deletes only a fully validated attempt-owned
+  recovery tree, refuses an injected foreign entry before recursive deletion,
+  and treats later descendant cleanup as already covered;
 * prior absence, regular, directory, symbolic-link, FIFO, and supported device
   states are restored only from exact attempt-bound authority;
 * reverse recovery does not recreate a hard link as unrelated bytes;

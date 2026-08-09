@@ -662,13 +662,16 @@ public:
         evidence.attempt() != attempt_.identity() ||
         evidence.target() != configured_.identity() ||
         !current_journal_ ||
-        evidence.journal() != current_journal_->header().identity() ||
-        evidence.state_projection() !=
-            current_journal_->header().state_projection())
+        evidence.journal() != current_journal_->header().identity())
     {
       throw std::invalid_argument(
           "completed evidence does not belong to this transaction");
     }
+    // A resumed application completes under a newly acquired outer lease and
+    // therefore a newly admitted state projection. The journal header retains
+    // the original process's projection, while the semantic engine validates
+    // the current restart projection. This backend has no authority for that
+    // current projection and must not compare it with the historical header.
     const auto identity = visit_request(request_, [&](const auto& value) {
       return completed_store_.publish(evidence, value);
     });

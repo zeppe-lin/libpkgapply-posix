@@ -178,6 +178,20 @@ pkgapply::lease_bound_state_projection state_projection(
       application_identity<pkgapply::state_projection_evidence_identity>(30));
 }
 
+pkgapply::application_durability_profile confirmed_durability()
+{
+  using D = pkgapply::application_durability_domain;
+  using S = pkgapply::application_durability_status;
+  return pkgapply::application_durability_profile({
+      {D::journal, S::confirmed},
+      {D::incoming_staging, S::confirmed},
+      {D::recovery_staging, S::confirmed},
+      {D::active_namespace, S::confirmed},
+      {D::rejected_object_store, S::confirmed},
+      {D::completed_evidence, S::confirmed},
+  });
+}
+
 std::size_t visible_entries(const std::string& path)
 {
   const std::string command = "find '" + path + "' -mindepth 1 -maxdepth 1 "
@@ -422,6 +436,55 @@ int main()
               checkpoint.admitted_observations().requested() == admitted_paths,
           "reopened POSIX transaction changed restart authority");
   resumed.reset();
+
+  // Restart continuation is admitted under a new physical lease. Completed
+  // evidence must therefore carry that current projection rather than the
+  // projection frozen in the original journal header. The backend owns the
+  // exact request/attempt/journal binding, but not semantic state-projection
+  // admission.
+  auto removal_transaction = backend->begin_without_incoming_image(
+      pkgapply::package_application_request(removal_request), lease);
+  const auto removal_observations = removal_transaction->observe({});
+  require(removal_observations.requested().empty(),
+          "empty removal fixture acquired unexpected observations");
+  const auto removal_attempt = pkgapply::application_attempt::make(
+      removal_request.identity(), target.identity(), backend->identity(),
+      removal_transaction->attempt_nonce());
+  const auto removal_state =
+      state_projection(lease, removal_plan.preconditions());
+  const auto removal_header = pkgapply::application_journal_header::make(
+      pkgplan::operation_kind::remove, removal_request.identity(),
+      removal_plan.identity(), removal_attempt, target.identity(),
+      removal_request.control().identity(), removal_state.identity(),
+      lease.identity(), backend->identity());
+  const auto removal_journal = removal_transaction->publish_journal(
+      pkgapply::application_journal_record::make(
+          removal_header, pkgapply::application_journal_state::preparing, {}, {}));
+  removal_transaction.reset();
+
+  fake_lease removal_restart_lease(
+      application_identity<pkgapply::mutation_lease_instance_identity>(42),
+      target.identity(), target.mutation_exclusion_domain());
+  const auto removal_restart_state =
+      state_projection(removal_restart_lease, removal_plan.preconditions());
+  require(removal_restart_state.identity() !=
+              removal_journal.header().state_projection(),
+          "restart fixture reused the original state projection");
+  auto removal_resumed = backend->resume_without_incoming_image(
+      pkgapply::package_application_request(removal_request),
+      removal_restart_lease, removal_journal);
+  const auto completed = pkgapply::completed_application_evidence::removal(
+      removal_request, removal_journal.header().attempt().identity(),
+      removal_restart_state.identity(), removal_journal.header().identity(), {},
+      confirmed_durability());
+  const auto completed_publication =
+      removal_resumed->publish_completed_evidence(completed);
+  require(completed_publication.outcome() ==
+              pkgapply::backend_operation_outcome::completed &&
+              completed_publication.record().has_value() &&
+              *completed_publication.record() == completed.identity(),
+          "POSIX restart rejected the current admitted state projection");
+  removal_resumed.reset();
 
   require(::rename(target_path.c_str(), moved_target.c_str()) == 0,
           "cannot move selected target root");

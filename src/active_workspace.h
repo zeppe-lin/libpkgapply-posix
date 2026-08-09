@@ -110,6 +110,8 @@ public:
 
   [[nodiscard]] const application_attempt& attempt() const noexcept;
   [[nodiscard]] int target_root_descriptor() const noexcept;
+  [[nodiscard]] std::string displaced_name(
+      const pkgplan::package_path& path) const;
   [[nodiscard]] active_path_workspace open(
       const pkgplan::package_path& path) const;
 

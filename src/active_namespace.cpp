@@ -520,6 +520,32 @@ prepare_special(const active_path_workspace& workspace,
 }
 
 [[nodiscard]] bool
+matches_object_kind(mode_t mode, completed_object_kind kind) noexcept
+{
+  switch (kind) {
+    case completed_object_kind::regular:
+      return S_ISREG(mode);
+    case completed_object_kind::directory:
+      return S_ISDIR(mode);
+    case completed_object_kind::symlink:
+      return S_ISLNK(mode);
+    case completed_object_kind::fifo:
+      return S_ISFIFO(mode);
+    case completed_object_kind::character_device:
+      return S_ISCHR(mode);
+    case completed_object_kind::block_device:
+      return S_ISBLK(mode);
+    case completed_object_kind::socket:
+      return S_ISSOCK(mode);
+    case completed_object_kind::other:
+      return !S_ISREG(mode) && !S_ISDIR(mode) && !S_ISLNK(mode) &&
+          !S_ISFIFO(mode) && !S_ISCHR(mode) && !S_ISBLK(mode) &&
+          !S_ISSOCK(mode);
+  }
+  return false;
+}
+
+[[nodiscard]] bool
 directory_empty(int parent, const std::string& name)
 {
   unique_fd directory(::openat(
@@ -1172,6 +1198,274 @@ void application_active_namespace::complete_effect(
   found->completed = true;
 }
 
+std::optional<pkgplan::package_path>
+application_active_namespace::completed_captured_removal_child(
+    const pkgplan::package_path& parent,
+    std::string_view workspace_name) const
+{
+  for (const auto& effect : effects_) {
+    if (effect.incoming || !effect.completed || capture(effect.path) == nullptr)
+      continue;
+    const auto effect_parent = effect.path.parent();
+    if (!effect_parent || *effect_parent != parent)
+      continue;
+    if (workspace_.displaced_name(effect.path) == workspace_name)
+      return effect.path;
+  }
+  return std::nullopt;
+}
+
+application_active_namespace::logical_directory_state
+application_active_namespace::logical_directory_contents(
+    int parent_descriptor,
+    const std::string& name,
+    const pkgplan::package_path& path) const
+{
+  unique_fd directory(::openat(
+      parent_descriptor, name.c_str(),
+      O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW));
+  if (directory.get() < 0)
+    return logical_directory_state::indeterminate;
+
+  DIR* stream = ::fdopendir(directory.release());
+  if (stream == nullptr)
+    return logical_directory_state::indeterminate;
+
+  bool recovery_workspace = false;
+  logical_directory_state result = logical_directory_state::empty;
+  for (;;) {
+    errno = 0;
+    dirent* entry = ::readdir(stream);
+    if (entry == nullptr) {
+      if (errno != 0)
+        result = logical_directory_state::indeterminate;
+      break;
+    }
+    if (std::strcmp(entry->d_name, ".") == 0 ||
+        std::strcmp(entry->d_name, "..") == 0)
+    {
+      continue;
+    }
+    const auto child =
+        completed_captured_removal_child(path, entry->d_name);
+    if (!child) {
+      result = logical_directory_state::nonempty;
+      break;
+    }
+    const auto* before = admitted(*child);
+    if (before == nullptr || before->state() != fact_state::known ||
+        !before->object())
+    {
+      result = logical_directory_state::indeterminate;
+      break;
+    }
+    struct stat status {};
+    int stat_result;
+    do {
+      stat_result = ::fstatat(
+          ::dirfd(stream), entry->d_name, &status, AT_SYMLINK_NOFOLLOW);
+    } while (stat_result != 0 && errno == EINTR);
+    if (stat_result != 0 ||
+        !matches_object_kind(status.st_mode, before->object()->kind()))
+    {
+      result = logical_directory_state::indeterminate;
+      break;
+    }
+    recovery_workspace = true;
+  }
+  static_cast<void>(::closedir(stream));
+  if (result == logical_directory_state::indeterminate ||
+      result == logical_directory_state::nonempty)
+  {
+    return result;
+  }
+  return recovery_workspace
+      ? logical_directory_state::recovery_workspace_only
+      : logical_directory_state::empty;
+}
+
+bool application_active_namespace::validate_recovery_tree(
+    int parent_descriptor,
+    const std::string& name,
+    const pkgplan::package_path& path) const
+{
+  unique_fd directory(::openat(
+      parent_descriptor, name.c_str(),
+      O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW));
+  if (directory.get() < 0)
+    return false;
+  const int stream_descriptor = duplicate_fd(directory.get());
+  if (stream_descriptor < 0)
+    return false;
+  DIR* stream = ::fdopendir(stream_descriptor);
+  if (stream == nullptr) {
+    static_cast<void>(::close(stream_descriptor));
+    return false;
+  }
+
+  bool valid = true;
+  for (;;) {
+    errno = 0;
+    dirent* entry = ::readdir(stream);
+    if (entry == nullptr) {
+      if (errno != 0)
+        valid = false;
+      break;
+    }
+    if (std::strcmp(entry->d_name, ".") == 0 ||
+        std::strcmp(entry->d_name, "..") == 0)
+    {
+      continue;
+    }
+    const auto child =
+        completed_captured_removal_child(path, entry->d_name);
+    if (!child) {
+      valid = false;
+      break;
+    }
+    const auto* before = admitted(*child);
+    if (before == nullptr || before->state() != fact_state::known ||
+        !before->object())
+    {
+      valid = false;
+      break;
+    }
+    struct stat status {};
+    int stat_result;
+    do {
+      stat_result = ::fstatat(
+          directory.get(), entry->d_name, &status, AT_SYMLINK_NOFOLLOW);
+    } while (stat_result != 0 && errno == EINTR);
+    if (stat_result != 0) {
+      valid = false;
+      break;
+    }
+    const bool expected_directory =
+        before->object()->kind() == completed_object_kind::directory;
+    if (!matches_object_kind(status.st_mode, before->object()->kind())) {
+      valid = false;
+      break;
+    }
+    if (expected_directory &&
+        !validate_recovery_tree(directory.get(), entry->d_name, *child))
+    {
+      valid = false;
+      break;
+    }
+  }
+  static_cast<void>(::closedir(stream));
+  return valid;
+}
+
+bool application_active_namespace::remove_recovery_tree(
+    int parent_descriptor,
+    const std::string& name,
+    const pkgplan::package_path& path)
+{
+  unique_fd directory(::openat(
+      parent_descriptor, name.c_str(),
+      O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW));
+  if (directory.get() < 0)
+    return false;
+  const int stream_descriptor = duplicate_fd(directory.get());
+  if (stream_descriptor < 0)
+    return false;
+  DIR* stream = ::fdopendir(stream_descriptor);
+  if (stream == nullptr) {
+    static_cast<void>(::close(stream_descriptor));
+    return false;
+  }
+
+  std::vector<std::pair<std::string, pkgplan::package_path>> children;
+  bool readable = true;
+  for (;;) {
+    errno = 0;
+    dirent* entry = ::readdir(stream);
+    if (entry == nullptr) {
+      if (errno != 0)
+        readable = false;
+      break;
+    }
+    if (std::strcmp(entry->d_name, ".") == 0 ||
+        std::strcmp(entry->d_name, "..") == 0)
+    {
+      continue;
+    }
+    const auto child =
+        completed_captured_removal_child(path, entry->d_name);
+    if (!child) {
+      readable = false;
+      break;
+    }
+    children.emplace_back(entry->d_name, *child);
+  }
+  static_cast<void>(::closedir(stream));
+  if (!readable)
+    return false;
+
+  for (const auto& [child_name, child_path] : children) {
+    const auto* before = admitted(child_path);
+    if (before == nullptr || before->state() != fact_state::known ||
+        !before->object())
+    {
+      return false;
+    }
+    if (before->object()->kind() == completed_object_kind::directory) {
+      if (!remove_recovery_tree(
+              directory.get(), child_name, child_path) ||
+          ::unlinkat(
+              directory.get(), child_name.c_str(), AT_REMOVEDIR) != 0)
+      {
+        return false;
+      }
+    } else if (::unlinkat(directory.get(), child_name.c_str(), 0) != 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
+application_active_namespace::nested_recovery_cleanup
+application_active_namespace::nested_cleanup_state(
+    const pkgplan::package_path& path) const
+{
+  const attempted_effect* root = nullptr;
+  for (const auto& effect : effects_) {
+    if (effect.incoming || !effect.completed ||
+        !effect.path.is_ancestor_of(path) || capture(effect.path) == nullptr)
+    {
+      continue;
+    }
+    const auto* before = admitted(effect.path);
+    if (before == nullptr || before->state() != fact_state::known ||
+        !before->object() ||
+        before->object()->kind() != completed_object_kind::directory)
+    {
+      continue;
+    }
+    if (root == nullptr ||
+        effect.path.string().size() < root->path.string().size())
+    {
+      root = &effect;
+    }
+  }
+  if (root == nullptr)
+    return nested_recovery_cleanup::independent;
+
+  try {
+    const active_path_workspace workspace = workspace_.open(root->path);
+    const active_workspace_snapshot snapshot = workspace.inspect();
+    if (snapshot.state() == active_workspace_state::clear) {
+      return snapshot.final_present()
+          ? nested_recovery_cleanup::independent
+          : nested_recovery_cleanup::covered;
+    }
+    return nested_recovery_cleanup::blocked;
+  } catch (const active_workspace_error&) {
+    return nested_recovery_cleanup::blocked;
+  }
+}
+
 namespace {
 
 struct admitted_directory_refresh final {
@@ -1320,14 +1614,13 @@ void application_active_namespace::retain_completed_effect(
     return;
   }
 
-  active_path_workspace workspace = workspace_.open(request.path());
-  const active_workspace_snapshot snapshot = workspace.inspect();
-  if (snapshot.state() == active_workspace_state::contradictory)
-    throw std::invalid_argument(
-        "completed active effect has contradictory workspace authority");
-
   bool established = false;
   if (incoming) {
+    active_path_workspace workspace = workspace_.open(request.path());
+    const active_workspace_snapshot snapshot = workspace.inspect();
+    if (snapshot.state() == active_workspace_state::contradictory)
+      throw std::invalid_argument(
+          "completed active effect has contradictory workspace authority");
     if (incoming_image_ == nullptr || !request.incoming_entry())
       throw std::invalid_argument(
           "completed incoming effect lacks image authority");
@@ -1337,10 +1630,23 @@ void application_active_namespace::retain_completed_effect(
         matches_incoming(
             workspace_.target_root_descriptor(), request.path(), *entry,
             true);
-  }
-  else {
-    established = !stat_leaf(
-        workspace.parent_descriptor(), workspace.leaf()).has_value();
+  } else {
+    try {
+      active_path_workspace workspace = workspace_.open(request.path());
+      const active_workspace_snapshot snapshot = workspace.inspect();
+      if (snapshot.state() == active_workspace_state::contradictory)
+        throw std::invalid_argument(
+            "completed active effect has contradictory workspace authority");
+      established = !snapshot.final_present();
+    } catch (const active_workspace_error& error) {
+      if (error.code() !=
+              active_workspace_error_code::path_resolution_failed ||
+          error.system_error() != ENOENT)
+      {
+        throw;
+      }
+      established = true;
+    }
   }
   if (!established)
     throw std::invalid_argument(
@@ -1469,10 +1775,13 @@ backend_operation_result application_active_namespace::remove(
 
   int result = -1;
   if (capture(request.path()) != nullptr) {
-    if (directory &&
-        !directory_empty(workspace.parent_descriptor(), workspace.leaf()))
-    {
-      return operation(backend_operation_outcome::conditional_retained);
+    if (directory) {
+      const logical_directory_state contents = logical_directory_contents(
+          workspace.parent_descriptor(), workspace.leaf(), request.path());
+      if (contents == logical_directory_state::indeterminate)
+        return operation(backend_operation_outcome::indeterminate);
+      if (contents == logical_directory_state::nonempty)
+        return operation(backend_operation_outcome::conditional_retained);
     }
     result = ::renameat(
         workspace.parent_descriptor(), workspace.leaf().c_str(),
@@ -1657,6 +1966,12 @@ backend_operation_result application_active_namespace::recover(
 backend_operation_result application_active_namespace::discard_recovery(
     const pkgplan::package_path& path)
 {
+  const nested_recovery_cleanup nested = nested_cleanup_state(path);
+  if (nested == nested_recovery_cleanup::covered)
+    return operation(backend_operation_outcome::completed);
+  if (nested == nested_recovery_cleanup::blocked)
+    return operation(backend_operation_outcome::indeterminate);
+
   active_path_workspace workspace = workspace_.open(path);
   const active_workspace_snapshot before = workspace.inspect();
   if (before.state() == active_workspace_state::clear)
@@ -1668,12 +1983,44 @@ backend_operation_result application_active_namespace::discard_recovery(
   {
     return operation(backend_operation_outcome::indeterminate);
   }
-  if (remove_leaf(
-          workspace.parent_descriptor(), workspace.displaced_name()) !=
-      leaf_removal::removed)
+
+  const auto* admitted_before = admitted(path);
+  if (admitted_before == nullptr ||
+      admitted_before->state() != fact_state::known ||
+      !admitted_before->object())
   {
     return operation(backend_operation_outcome::indeterminate);
   }
+  const auto displaced = stat_leaf(
+      workspace.parent_descriptor(), workspace.displaced_name());
+  if (!displaced)
+    return operation(backend_operation_outcome::indeterminate);
+  const bool expected_directory =
+      admitted_before->object()->kind() == completed_object_kind::directory;
+  if (!matches_object_kind(
+          displaced->st_mode, admitted_before->object()->kind()))
+  {
+    return operation(backend_operation_outcome::indeterminate);
+  }
+
+  if (expected_directory) {
+    if (!validate_recovery_tree(
+            workspace.parent_descriptor(), workspace.displaced_name(), path) ||
+        !remove_recovery_tree(
+            workspace.parent_descriptor(), workspace.displaced_name(), path) ||
+        ::unlinkat(
+            workspace.parent_descriptor(), workspace.displaced_name().c_str(),
+            AT_REMOVEDIR) != 0)
+    {
+      return operation(backend_operation_outcome::indeterminate);
+    }
+  } else if (remove_leaf(
+                 workspace.parent_descriptor(), workspace.displaced_name()) !=
+             leaf_removal::removed)
+  {
+    return operation(backend_operation_outcome::indeterminate);
+  }
+
   const active_workspace_snapshot after = workspace.inspect();
   if (after.state() != active_workspace_state::clear ||
       after.final_present() != before.final_present())

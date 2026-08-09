@@ -396,6 +396,13 @@ int application_active_workspace::target_root_descriptor() const noexcept
   return target_root_fd_;
 }
 
+std::string application_active_workspace::displaced_name(
+    const pkgplan::package_path& path) const
+{
+  return ".libpkgapply-old-" +
+      hexadecimal_prefix(workspace_digest(attempt_, path));
+}
+
 active_path_workspace application_active_workspace::open(
     const pkgplan::package_path& path) const
 {
@@ -433,8 +440,7 @@ active_path_workspace application_active_workspace::open(
       hexadecimal_prefix(workspace_digest(attempt_, path));
   return active_path_workspace(
       parent.release(), path, leaf,
-      ".libpkgapply-new-" + token,
-      ".libpkgapply-old-" + token);
+      ".libpkgapply-new-" + token, displaced_name(path));
 }
 
 } // namespace pkgapply::posix::detail

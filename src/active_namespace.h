@@ -3,6 +3,9 @@
 
 #pragma once
 
+#include <optional>
+#include <string>
+#include <string_view>
 #include <vector>
 
 #include <libpkgapply-posix/capture_store.h>
@@ -82,6 +85,38 @@ private:
   void complete_effect(const pkgplan::package_path& path, bool incoming);
   [[nodiscard]] bool refresh_ancestor_directories(
       const pkgplan::package_path& changed_path);
+
+  enum class logical_directory_state : std::uint8_t {
+    empty,
+    recovery_workspace_only,
+    nonempty,
+    indeterminate,
+  };
+
+  enum class nested_recovery_cleanup : std::uint8_t {
+    independent,
+    covered,
+    blocked,
+  };
+
+  [[nodiscard]] std::optional<pkgplan::package_path>
+  completed_captured_removal_child(
+      const pkgplan::package_path& parent,
+      std::string_view workspace_name) const;
+  [[nodiscard]] logical_directory_state logical_directory_contents(
+      int parent_descriptor,
+      const std::string& name,
+      const pkgplan::package_path& path) const;
+  [[nodiscard]] bool validate_recovery_tree(
+      int parent_descriptor,
+      const std::string& name,
+      const pkgplan::package_path& path) const;
+  [[nodiscard]] bool remove_recovery_tree(
+      int parent_descriptor,
+      const std::string& name,
+      const pkgplan::package_path& path);
+  [[nodiscard]] nested_recovery_cleanup nested_cleanup_state(
+      const pkgplan::package_path& path) const;
 
   struct attempted_effect final {
     pkgplan::package_path path;

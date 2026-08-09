@@ -92,6 +92,13 @@ payloads, captures, rejected records, active target/workspace facts, durability
 facts, and completed evidence. Missing or contradictory authority is a typed
 restart failure, not permission to repeat unresolved mutation.
 
+If that checkpoint retains completed evidence from the original process, a
+restart admitted under a new lease-bound state projection may publish another
+immutable completed-evidence record for the same request, attempt, and journal
+authority. The historical record is preserved. After the rebound record is
+synchronized, a later checkpoint may retain it as the current completed-evidence
+authority for receipt sealing.
+
 The journal store also retains one direct active-journal index per exact
 application-request identity. *load_active()* follows only that index and then
 validates the named journal against the request. It does not scan journals,

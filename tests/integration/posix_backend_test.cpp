@@ -460,6 +460,32 @@ int main()
   const auto removal_journal = removal_transaction->publish_journal(
       pkgapply::application_journal_record::make(
           removal_header, pkgapply::application_journal_state::preparing, {}, {}));
+
+  // A crash may leave immutable completed evidence bound to the original
+  // process projection before receipt sealing. Retain that historical record
+  // in the restart checkpoint, then prove a reopened transaction can publish
+  // another immutable record for the same request/attempt/journal authority
+  // under the newly acquired lease projection.
+  const auto historical_completed =
+      pkgapply::completed_application_evidence::removal(
+          removal_request, removal_journal.header().attempt().identity(),
+          removal_state.identity(), removal_journal.header().identity(), {},
+          confirmed_durability());
+  const auto historical_publication =
+      removal_transaction->publish_completed_evidence(historical_completed);
+  require(historical_publication.outcome() ==
+              pkgapply::backend_operation_outcome::completed &&
+              historical_publication.record().has_value() &&
+              *historical_publication.record() == historical_completed.identity(),
+          "POSIX backend did not publish historical completed evidence");
+  const auto historical_durability = removal_transaction->synchronize(
+      pkgapply::application_durability_domain::completed_evidence);
+  require(historical_durability.status() ==
+              pkgapply::application_durability_status::confirmed,
+          "POSIX backend did not durably confirm historical completed evidence");
+  const auto historical_journal = removal_transaction->publish_journal(
+      pkgapply::application_journal_record::make(
+          removal_header, pkgapply::application_journal_state::prepared, {}, {}));
   removal_transaction.reset();
 
   fake_lease removal_restart_lease(
@@ -468,15 +494,23 @@ int main()
   const auto removal_restart_state =
       state_projection(removal_restart_lease, removal_plan.preconditions());
   require(removal_restart_state.identity() !=
-              removal_journal.header().state_projection(),
+              historical_journal.header().state_projection(),
           "restart fixture reused the original state projection");
   auto removal_resumed = backend->resume_without_incoming_image(
       pkgapply::package_application_request(removal_request),
-      removal_restart_lease, removal_journal);
+      removal_restart_lease, historical_journal);
+  const auto historical_checkpoint =
+      removal_resumed->restart_checkpoint(historical_journal);
+  require(historical_checkpoint.completed_evidence().has_value() &&
+              historical_checkpoint.completed_evidence()->identity() ==
+                  historical_completed.identity(),
+          "POSIX restart did not retain historical completed evidence");
   const auto completed = pkgapply::completed_application_evidence::removal(
-      removal_request, removal_journal.header().attempt().identity(),
-      removal_restart_state.identity(), removal_journal.header().identity(), {},
+      removal_request, historical_journal.header().attempt().identity(),
+      removal_restart_state.identity(), historical_journal.header().identity(), {},
       confirmed_durability());
+  require(completed.identity() != historical_completed.identity(),
+          "restart fixture did not change completed-evidence projection identity");
   const auto completed_publication =
       removal_resumed->publish_completed_evidence(completed);
   require(completed_publication.outcome() ==
@@ -484,7 +518,31 @@ int main()
               completed_publication.record().has_value() &&
               *completed_publication.record() == completed.identity(),
           "POSIX restart rejected the current admitted state projection");
+  const auto rebound_durability = removal_resumed->synchronize(
+      pkgapply::application_durability_domain::completed_evidence);
+  require(rebound_durability.status() ==
+              pkgapply::application_durability_status::confirmed,
+          "POSIX restart did not durably confirm rebound completed evidence");
+  const auto rebound_journal = removal_resumed->publish_journal(
+      pkgapply::application_journal_record::make(
+          removal_header, pkgapply::application_journal_state::mutating, {}, {}));
   removal_resumed.reset();
+
+  fake_lease checkpoint_lease(
+      application_identity<pkgapply::mutation_lease_instance_identity>(43),
+      target.identity(), target.mutation_exclusion_domain());
+  auto checkpoint_resumed = backend->resume_without_incoming_image(
+      pkgapply::package_application_request(removal_request), checkpoint_lease,
+      rebound_journal);
+  const auto rebound_checkpoint =
+      checkpoint_resumed->restart_checkpoint(rebound_journal);
+  require(rebound_checkpoint.completed_evidence().has_value() &&
+              rebound_checkpoint.completed_evidence()->identity() ==
+                  completed.identity() &&
+              rebound_checkpoint.completed_evidence()->state_projection() ==
+                  removal_restart_state.identity(),
+          "POSIX checkpoint did not retain rebound completed evidence");
+  checkpoint_resumed.reset();
 
   require(::rename(target_path.c_str(), moved_target.c_str()) == 0,
           "cannot move selected target root");

@@ -168,6 +168,8 @@ Completed-evidence store tests must prove:
   and backend-evidence identity;
 * publication uses a mode-0600 regular file and exposes no partial record;
 * an exact republication returns the same completed-evidence identity;
+* historical and restart-rebound completed-evidence identities can coexist
+  without either immutable record replacing the other;
 * a different record cannot replace an existing identity-keyed record;
 * truncated, same-length corrupted, checksum-invalid, foreign-request, and
   identity-inconsistent records are rejected before publication is claimed;
@@ -196,6 +198,10 @@ Complete POSIX transaction-composition tests must prove:
 * restart reproduces the original attempt nonce and exact journal identity;
 * every checkpoint claim is revalidated against sealed payload, capture,
   rejected, active-workspace, and completed-evidence authority;
+* a checkpoint retaining historical completed evidence can be reopened under a
+  new lease, publish current-projection evidence, reconfirm its durability, and
+  advance a later checkpoint to that rebound evidence without mutating the
+  historical record;
 * completed prefixes are skipped, unresolved active or recovery intents are
   never reissued, and unstarted work remains in frozen schedule order;
 * transaction destruction preserves durable and unresolved recovery authority;

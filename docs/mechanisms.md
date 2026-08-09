@@ -261,9 +261,12 @@ checkpoint reference alone is never substituted for the evidence body.
 Publication uses a private mode-0600 temporary regular file, synchronizes the
 complete record before exposure, and installs an identity-keyed immutable name
 without replacement. Exact republication is idempotent only when the existing
-bytes decode to the same completed evidence. Conflicting, truncated, corrupt,
-foreign-request, or identity-inconsistent records are typed failures and are
-never treated as completed publication.
+bytes decode to the same completed evidence. Distinct completed-evidence
+identities for the same request, attempt, and journal may coexist when restart
+rebinds otherwise equivalent completion proof to a newly admitted lease-bound
+state projection; the historical record is never overwritten. Conflicting,
+truncated, corrupt, foreign-request, or identity-inconsistent records are typed
+failures and are never treated as completed publication.
 
 Visibility and durability remain separate. `publish_completed_evidence()` may
 report `completed` after the immutable record is visible and returns exactly the
@@ -281,11 +284,15 @@ adapter. Neither store acquires `libpkgstate` authority, and neither may publish
 installed state.
 
 On restart, a checkpoint that says evidence publication completed is accepted
-only after the complete backend verifies the same immutable record. An unresolved
-publication intent is not blindly repeated; the backend first distinguishes no
-record, exact visible record, and contradictory storage state. Terminal cleanup
-must not remove completed evidence while a receipt or durable journal still
-references it.
+only after the complete backend verifies the retained immutable record. When the
+semantic engine admits continuation under a new lease-bound projection, the same
+transaction may publish a second immutable completed-evidence record and, after
+its durability is confirmed, a later checkpoint retains that rebound record as
+current restart authority. The historical record remains immutable. An
+unresolved publication intent is not blindly repeated; the backend first
+distinguishes no record, exact visible record, and contradictory storage state.
+Terminal cleanup must not remove completed evidence while a receipt or durable
+journal still references it.
 
 POSIX backend transaction composition
 -------------------------------------

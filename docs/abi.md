@@ -1,6 +1,6 @@
 # ELF ABI policy
 
-The additive 3.1.0 release preserves `libpkgapply-posix.so.2`. The SONAME
+The additive 3.2.0 release preserves `libpkgapply-posix.so.2`. The SONAME
 belongs to the already-published in-tree POSIX ABI generation; repository
 extraction does not manufacture an ABI break.
 

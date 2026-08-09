@@ -45,6 +45,8 @@ enum class rejected_store_error_code : std::uint8_t {
   record_publish_failed, /*!< Rejected record could not be published atomically. */
   namespace_sync_failed, /*!< Rejected namespace could not be synchronized. */
   object_not_regular, /*!< Regular-byte access was requested for another type. */
+  identity_index_open_failed, /*!< Direct record-identity index could not be opened. */
+  identity_index_invalid, /*!< Direct record-identity index is structurally invalid. */
 };
 
 /*! \brief POSIX rejected-object publication failure. */
@@ -126,6 +128,7 @@ public:
 
 private:
   friend class published_rejected_object;
+  friend class identified_rejected_object;
   rejected_regular_object(int descriptor, std::uint64_t size) noexcept;
 
   int descriptor_ = -1;
@@ -195,6 +198,79 @@ private:
   class implementation;
   friend class application_rejected_object_store;
   explicit published_rejected_object(std::unique_ptr<implementation> state);
+  std::unique_ptr<implementation> state_;
+};
+
+/*! \brief One immutable rejected record reopened by canonical record identity.
+ *
+ *  This view is self-contained evidence. It deliberately does not reconstruct
+ *  a planner-derived backend request: direct identity reopening proves the
+ *  retained object, attempt, plan, provenance side, reason, and observation,
+ *  while application restart continues to use the stricter request-bound
+ *  load() authority.
+ */
+class PKGAPPLY_POSIX_API identified_rejected_object final {
+public:
+  /*! \brief Provider objects forbid copy construction. */
+  identified_rejected_object(const identified_rejected_object&) = delete;
+  /*! \brief Provider objects forbid copy assignment. */
+  identified_rejected_object& operator=(const identified_rejected_object&) = delete;
+  /*!
+   * \brief Move one directly identified rejected-object authority.
+   * \param other Source object whose owned resources are transferred.
+   */
+  identified_rejected_object(identified_rejected_object&& other) noexcept;
+  /*!
+   * \brief Replace this authority by move.
+   * \param other Source object whose owned resources are transferred.
+   * \return Reference to this object after taking ownership from @p other.
+   */
+  identified_rejected_object& operator=(identified_rejected_object&& other) noexcept;
+  /*! \brief Release retained index and payload descriptors. */
+  ~identified_rejected_object();
+
+  /*!
+   * \brief Return the exact physical application-attempt identity.
+   * \return Exact physical application-attempt identity.
+   */
+  [[nodiscard]] const application_attempt_identity& attempt() const noexcept;
+  /*!
+   * \brief Return the exact accepted operation-plan identity.
+   * \return Exact accepted operation-plan identity.
+   */
+  [[nodiscard]] const pkgplan::operation_plan_identity& plan() const noexcept;
+  /*!
+   * \brief Return whether bytes came from incoming or old authority.
+   * \return Rejected-object provenance side.
+   */
+  [[nodiscard]] rejected_object_source source() const noexcept;
+  /*!
+   * \brief Return the planner reason retained by the immutable record.
+   * \return Planner rejected-object reason retained by the record.
+   */
+  [[nodiscard]] pkgplan::rejected_object_reason reason() const noexcept;
+  /*!
+   * \brief Return the exact observed object retained by the record.
+   * \return Exact application-path observation retained by the record.
+   */
+  [[nodiscard]] const application_path_observation& observation() const noexcept;
+  /*!
+   * \brief Return the canonical record identity used to reopen this object.
+   * \return Canonical rejected-object record identity.
+   */
+  [[nodiscard]] const rejected_object_record_identity& identity() const noexcept;
+
+  /*!
+   * \brief Open verified self-contained bytes for a regular rejected object.
+   * \return Owned read-only descriptor and verified size.
+   * \throws rejected_store_error If type, bytes, or record authority differ.
+   */
+  [[nodiscard]] rejected_regular_object open_regular() const;
+
+private:
+  class implementation;
+  friend class application_rejected_object_store;
+  explicit identified_rejected_object(std::unique_ptr<implementation> state);
   std::unique_ptr<implementation> state_;
 };
 
@@ -296,6 +372,18 @@ public:
       const application_attempt& attempt,
       const pkgplan::operation_plan_identity& plan,
       const backend_rejected_effect_request& request) const;
+
+  /*! \brief Reopen one exact immutable record by canonical record identity.
+   *  \param identity Record identity retained by completed application evidence.
+   *  \return Self-contained record evidence, or empty when no indexed record exists.
+   *  \throws rejected_store_error If indexed authority or bytes are corrupt.
+   *
+   *  This operation does not enumerate rejected storage and does not infer a
+   *  backend request. The record identity is the complete lookup key owned by
+   *  this provider.
+   */
+  [[nodiscard]] std::optional<identified_rejected_object> load_identified(
+      const rejected_object_record_identity& identity) const;
 
   /*! \brief Synchronize one attempt's records and namespace parents.
    *  \param attempt Exact attempt namespace to synchronize.

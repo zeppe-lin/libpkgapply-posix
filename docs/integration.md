@@ -12,5 +12,8 @@ requirements and enter consumer flags only for static linkage.
 
 Repository separation is intentional. A non-POSIX backend may implement the
 same `libpkgapply` contracts without inheriting POSIX storage layout, system
-calls, or failure categories. Conversely, POSIX mechanism changes can be
-reviewed without touching semantic application policy.
+calls, or failure categories. Rejected-object record identity becomes a direct
+reopening key only because this provider explicitly indexes and validates it;
+consumers must not derive or scan the private POSIX storage layout. Conversely,
+POSIX mechanism changes can be reviewed without touching semantic application
+policy.

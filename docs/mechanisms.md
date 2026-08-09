@@ -1,7 +1,7 @@
 # POSIX mechanism protocols
 
 The following mechanism notes were extracted from the libpkgapply 2.3.0 design document.
-They describe the implementation owned by libpkgapply-posix 3.1.0.
+They describe the implementation owned by libpkgapply-posix 3.2.0.
 
 The POSIX storage layer remains deliberately byte-oriented. Journal storage
 derives one safe filename from the stable journal identity, opens the store as a
@@ -110,10 +110,21 @@ immutable stable names before their records are published. Record identities are
 domain-separated over canonical source-bound record bodies. Exact republication
 verifies the existing request, source, object facts, and payload before
 returning the same record and backend-evidence identities. Restart loading
-revalidates the
-attempt and plan bindings, record checksum, request, source class, object facts,
-and any regular payload before granting a read-only descriptor. Corrupt bindings
-and records become typed rejected-store failures.
+revalidates the attempt and plan bindings, record checksum, request, source
+class, object facts, and any regular payload before granting a read-only
+descriptor. Corrupt bindings and records become typed rejected-store failures.
+
+Every completed publication also publishes a provider-private direct index keyed
+by the canonical rejected-object record identity. For regular objects, the
+payload link is visible before the record link; the record link is therefore the
+direct-lookup selector. Exact republication repairs a missing selector after an
+interrupted index publication. `load_identified()` follows only the supplied
+record identity, recomputes that identity from the immutable record, validates
+typed source/reason/observation facts and any regular payload, and returns
+self-contained evidence. It does not scan rejected storage, consult an attempt
+binding, or reconstruct a planner-derived backend request. Application restart
+continues to use the stricter request-bound `load()` path. The index naming and
+hard-link layout are private provider mechanics, not a consumer protocol.
 
 Non-regular objects remain typed records; the store does not materialize them as
 live filesystem nodes. Record visibility does not claim rejected-store

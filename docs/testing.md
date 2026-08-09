@@ -30,7 +30,8 @@ The evidence roles are distinct:
    require private symbols from the installed shared library.
 3. `integration` composes the public POSIX backend with real `libpkgapply`
    authority. It covers factory/request binding, complete mechanism routing,
-   restart, descriptor retention, and all six durability domains. The
+   restart, descriptor retention, completed rejected-record identity reopening,
+   and all six durability domains. The
    durability-failure case injects real `fsync(2)` failure: active-namespace
    fault classification is proved at the direct mechanism seam, while journal,
    incoming staging, recovery staging, rejected storage, and completed evidence

@@ -5,7 +5,7 @@ set -eu
 build=$1
 pc=$build/meson-private/libpkgapply-posix.pc
 [ -s "$pc" ] || { echo "pkgconfig-metadata: missing $pc" >&2; exit 1; }
-grep -F 'Version: 3.1.0' "$pc" >/dev/null
+grep -F 'Version: 3.2.0' "$pc" >/dev/null
 grep -F -- '-lpkgapply-posix' "$pc" >/dev/null
 public=$(sed -n 's/^Requires:[[:space:]]*//p' "$pc")
 private=$(sed -n 's/^Requires\.private:[[:space:]]*//p' "$pc")

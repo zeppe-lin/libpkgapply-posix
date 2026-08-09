@@ -4,7 +4,7 @@
 `libpkgapply`.
 
 It implements descriptor-anchored target observation, caller-owned mutation
-leases, private payload staging, old-object capture, rejected-object storage,
+leases, private payload staging, old-object capture, rejected-object storage and direct identity reopening,
 durable journals and restart checkpoints, completed-evidence publication,
 active namespace mutation and recovery, and the composed
 `application_posix_backend`.

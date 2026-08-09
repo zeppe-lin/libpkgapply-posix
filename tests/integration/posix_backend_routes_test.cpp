@@ -4,6 +4,7 @@
 #include "plan_fixture.h"
 
 #include <libpkgapply-posix/backend.h>
+#include <libpkgapply-posix/rejected_store.h>
 #include <libpkgapply-posix/target_observer.h>
 #include <libpkgapply/apply.h>
 
@@ -152,6 +153,22 @@ std::string read_file(const std::string& path)
   }
   require(::close(descriptor) == 0,
           "cannot close backend route-test result");
+  return result;
+}
+
+std::string read_file_descriptor(int descriptor)
+{
+  std::string result;
+  std::array<char, 64> buffer{};
+  for (;;) {
+    const ssize_t count = ::read(descriptor, buffer.data(), buffer.size());
+    if (count < 0 && errno == EINTR)
+      continue;
+    require(count >= 0, "cannot read backend route-test descriptor");
+    if (count == 0)
+      break;
+    result.append(buffer.data(), static_cast<std::size_t>(count));
+  }
   return result;
 }
 
@@ -526,6 +543,24 @@ void test_incoming_rejected_stage()
               pkgapply::application_durability_domain::rejected_object_store) ==
               pkgapply::application_durability_status::confirmed,
           "rejected incoming object durability was not confirmed");
+
+  auto rejected_store =
+      pkgapply::posix::application_rejected_object_store::open(
+          layout.store("rejected"));
+  auto identified = rejected_store.load_identified(*path_result.rejected_object());
+  require(identified.has_value() &&
+              identified->identity() == *path_result.rejected_object() &&
+              identified->attempt() == receipt.attempt() &&
+              identified->plan() == plan.identity() &&
+              identified->source() ==
+                  pkgapply::posix::rejected_object_source::incoming &&
+              identified->observation().path() == path,
+          "completed rejected evidence did not directly reopen immutable authority");
+  {
+    auto object = identified->open_regular();
+    require(read_file_descriptor(object.descriptor()) == bytes,
+            "directly reopened completed rejected evidence changed payload bytes");
+  }
 }
 
 void test_regular_removal_with_capture()

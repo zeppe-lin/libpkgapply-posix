@@ -25,8 +25,8 @@ export PKG_CONFIG_PATH="$prefix/lib/pkgconfig:$deps/lib/pkgconfig${PKG_CONFIG_PA
 export LD_LIBRARY_PATH="$prefix/lib:$deps/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 unset PKG_CONFIG_SYSROOT_DIR
 
-[ "$(pkg-config --modversion libpkgapply-posix)" = 3.1.0 ] || {
-  echo 'installed libpkgapply-posix version is not 3.1.0' >&2
+[ "$(pkg-config --modversion libpkgapply-posix)" = 3.2.0 ] || {
+  echo 'installed libpkgapply-posix version is not 3.2.0' >&2
   exit 1
 }
 

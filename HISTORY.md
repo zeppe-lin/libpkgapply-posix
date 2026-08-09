@@ -1,5 +1,15 @@
 # History
 
+## 3.2.0
+
+- Made rejected-object record identity a direct provider-owned reopening key.
+- Added self-contained identity reopening without reconstructing planner commands
+  or requiring retained application-journal authority.
+- Published regular payload index authority before the record selector and repair
+  the index on exact rejected-object republication after interrupted publication.
+- Kept request-bound restart loading unchanged and preserved
+  `libpkgapply-posix.so.2` / API generation 2 as an additive release.
+
 ## 3.1.0
 
 - Keep direct incoming regular rejected-object evidence publication-complete

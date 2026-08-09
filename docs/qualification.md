@@ -92,10 +92,17 @@ Immutable rejected-store tests prove:
 * directories, symbolic links, FIFOs, and devices retain typed facts without
   granting regular-payload descriptors or creating live special objects;
 * exact republication returns the same immutable record identity;
+* completed record identity directly reopens incoming, old, regular, and
+  non-regular self-contained evidence without a planner command;
+* missing direct selectors grant no authority and exact republication repairs
+  an interrupted identity-index publication;
+* direct identity reopening validates the record identity and payload bytes,
+  while remaining independent of the attempt binding used by restart;
 * foreign attempts, foreign plans, and source mismatches are rejected;
 * restart loading rejects malformed bindings, malformed records, and corrupted
   payloads through typed store failures before granting a descriptor;
-* namespace descriptors remain authoritative after pathname movement; and
+* namespace descriptors and direct identity lookup remain authoritative after
+  pathname movement; and
 * record visibility and namespace synchronization remain separate operations.
 
 Active-namespace qualification is split by mechanism boundary. Workspace tests

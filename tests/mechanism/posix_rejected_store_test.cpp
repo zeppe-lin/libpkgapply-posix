@@ -505,10 +505,49 @@ int main()
             "incoming rejected regular payload changed");
   }
 
+  auto identified_regular =
+      rejected_store.load_identified(*regular_result.record());
+  require(identified_regular.has_value(),
+          "record identity did not reopen incoming rejected evidence");
+  require(identified_regular->identity() == *regular_result.record() &&
+              identified_regular->attempt() == admitted_attempt.identity() &&
+              identified_regular->plan() == admitted_plan &&
+              identified_regular->source() ==
+                  pkgapply::posix::rejected_object_source::incoming &&
+              identified_regular->reason() == regular_request.reason() &&
+              identified_regular->observation().path() ==
+                  loaded_regular->observation().path() &&
+              identified_regular->observation().state() ==
+                  loaded_regular->observation().state() &&
+              identified_regular->observation().object() ==
+                  loaded_regular->observation().object(),
+          "direct rejected identity reopening changed retained authority");
+  {
+    auto object = identified_regular->open_regular();
+    require(object.size() == 4 &&
+                read_descriptor(object.descriptor()) == "abcd",
+            "direct rejected identity reopening changed payload bytes");
+  }
+  require(!rejected_store.load_identified(
+               identity<pkgapply::rejected_object_record_identity>(121))
+               .has_value(),
+          "unknown rejected record identity aliased published evidence");
+
+  const std::string regular_identity_hex = regular_result.record()->string().substr(
+      std::string("v1:sha256:").size());
+  const std::string indexed_regular_record =
+      rejected_directory.path() + "/by-id-v1/record-v1-" + regular_identity_hex;
+  require(::unlink(indexed_regular_record.c_str()) == 0,
+          "cannot simulate interrupted rejected identity indexing");
+  require(!rejected_store.load_identified(*regular_result.record()).has_value(),
+          "missing identity selector still granted direct rejected authority");
+
   const auto repeated_regular = rejected_store.publish_incoming(
       admitted_attempt, admitted_plan, regular_request, archive.image(), *payloads);
   require(repeated_regular.record() == regular_result.record(),
           "exact rejected publication was not idempotent");
+  require(rejected_store.load_identified(*regular_result.record()).has_value(),
+          "exact rejected republication did not repair identity indexing");
 
   const auto& hardlink = image_entry(archive.image(), "usr/bin/tool-hard");
   const auto hardlink_request = pkgapply::test::fixture::rejected_request(
@@ -563,6 +602,12 @@ int main()
               loaded_symlink->observation().object()->symlink_target().value() ==
                   std::optional<std::string>("tool"),
           "symbolic-link rejected record changed its target");
+  auto identified_symlink =
+      rejected_store.load_identified(*symlink_result.record());
+  require(identified_symlink.has_value() &&
+              identified_symlink->observation().object()->symlink_target().value() ==
+                  std::optional<std::string>("tool"),
+          "direct rejected identity reopening lost non-regular metadata");
   bool nonregular_rejected = false;
   try {
     static_cast<void>(loaded_symlink->open_regular());
@@ -688,6 +733,19 @@ int main()
     require(read_descriptor(object.descriptor()) == "old bytes",
             "old rejected record reread the mutated target");
   }
+  auto identified_old = rejected_store.load_identified(*old_result.record());
+  require(identified_old.has_value() &&
+              identified_old->source() ==
+                  pkgapply::posix::rejected_object_source::old &&
+              identified_old->reason() == old_request.reason() &&
+              identified_old->observation().object()->provenance() ==
+                  pkgapply::object_fact_provenance::rejected_capture,
+          "direct rejected identity reopening lost old capture authority");
+  {
+    auto object = identified_old->open_regular();
+    require(read_descriptor(object.descriptor()) == "old bytes",
+            "direct old identity reopening reread the mutated target");
+  }
   require(rejected_store.publish_old(
               old_attempt, old_operation.identity(), old_request, *captured).record() ==
               old_result.record(),
@@ -707,12 +765,23 @@ int main()
           rejected_fd);
   require(::close(rejected_fd) == 0,
           "cannot close caller rejected-store descriptor");
+  auto retained_identified = anchored.load_identified(*regular_result.record());
+  require(retained_identified.has_value(),
+          "cannot retain directly identified rejected evidence");
+
   const std::string moved = rejected_directory.path() + "-moved";
   require(::rename(rejected_directory.path().c_str(), moved.c_str()) == 0,
           "cannot move rejected-object namespace");
   require(anchored.load(
               admitted_attempt, admitted_plan, regular_request).has_value(),
           "descriptor-anchored rejected store followed the old pathname");
+  require(anchored.load_identified(*regular_result.record()).has_value(),
+          "descriptor-anchored identity index followed the old pathname");
+  {
+    auto object = retained_identified->open_regular();
+    require(read_descriptor(object.descriptor()) == "abcd",
+            "retained direct rejected evidence followed the old pathname");
+  }
   anchored.synchronize(admitted_attempt);
   require(::rename(moved.c_str(), rejected_directory.path().c_str()) == 0,
           "cannot restore rejected-object namespace pathname");
@@ -735,6 +804,16 @@ int main()
   }
   require(corruption_rejected,
           "rejected payload corruption survived restart validation");
+  bool direct_corruption_rejected = false;
+  try {
+    static_cast<void>(
+        rejected_store.load_identified(*regular_result.record()));
+  } catch (const pkgapply::posix::rejected_store_error& error) {
+    direct_corruption_rejected = error.code() ==
+        pkgapply::posix::rejected_store_error_code::payload_mismatch;
+  }
+  require(direct_corruption_rejected,
+          "direct rejected identity reopening accepted corrupt payload bytes");
 
   const std::string old_attempt_hex = old_attempt.identity().string().substr(
       std::string("v1:sha256:").size());
@@ -773,6 +852,8 @@ int main()
   }
   require(binding_corruption_rejected,
           "malformed rejected binding escaped typed restart validation");
+  require(rejected_store.load_identified(*character_result.record()).has_value(),
+          "direct rejected identity reopening depended on attempt binding");
 
   return 0;
 }

@@ -86,6 +86,15 @@ struct rejected_record final {
   rejected_object_record_identity identity;
 };
 
+struct identified_record final {
+  application_attempt_identity attempt;
+  pkgplan::operation_plan_identity plan;
+  rejected_object_source source;
+  pkgplan::rejected_object_reason reason;
+  application_path_observation observation;
+  rejected_object_record_identity identity;
+};
+
 [[noreturn]] void
 throw_error(rejected_store_error_code code,
             int system_error,
@@ -516,6 +525,24 @@ require_attempt_body(byte_reader& reader, const application_attempt& attempt)
                 "rejected-object attempt nonce mismatch");
 }
 
+application_attempt
+read_attempt_body(byte_reader& reader)
+{
+  const auto identity = application_attempt_identity::parse(reader.string());
+  const auto request = application_request_identity::parse(reader.string());
+  const auto target = application_target_context_identity::parse(reader.string());
+  const auto backend = mutation_backend_identity::parse(reader.string());
+  application_attempt_nonce::byte_array nonce{};
+  for (auto& byte : nonce)
+    byte = reader.u8();
+  auto attempt = application_attempt::make(
+      request, target, backend, application_attempt_nonce::from_bytes(nonce));
+  if (attempt.identity() != identity)
+    throw_error(rejected_store_error_code::record_invalid, EINVAL, {},
+                "rejected-object record has invalid attempt identity");
+  return attempt;
+}
+
 template<class Value, class Encoder>
 void
 append_fact(std::vector<std::byte>& body,
@@ -883,6 +910,109 @@ decode_record(const std::vector<std::byte>& bytes,
   }
 }
 
+identified_record
+decode_identified_record_unchecked(
+    const std::vector<std::byte>& bytes,
+    const rejected_object_record_identity& expected_identity)
+{
+  const auto body = unframe(
+      bytes, record_magic, rejected_record_encoding_version);
+  byte_reader reader(body);
+  auto attempt = read_attempt_body(reader);
+  auto plan = pkgplan::operation_plan_identity::parse(reader.string());
+
+  const auto source_value = reader.u8();
+  if (source_value < static_cast<std::uint8_t>(
+                         pkgplan::rejected_object_source_side::incoming) ||
+      source_value > static_cast<std::uint8_t>(
+                         pkgplan::rejected_object_source_side::old_installed))
+  {
+    throw_error(rejected_store_error_code::record_invalid, EINVAL, {},
+                "rejected-object record has invalid source side");
+  }
+  const auto source_side =
+      static_cast<pkgplan::rejected_object_source_side>(source_value);
+
+  const auto reason_value = reader.u8();
+  if (reason_value < static_cast<std::uint8_t>(
+                         pkgplan::rejected_object_reason::install_policy_exclusion) ||
+      reason_value > static_cast<std::uint8_t>(
+                         pkgplan::rejected_object_reason::removal_old_preservation))
+  {
+    throw_error(rejected_store_error_code::record_invalid, EINVAL, {},
+                "rejected-object record has invalid reason");
+  }
+  const auto reason = static_cast<pkgplan::rejected_object_reason>(reason_value);
+  auto path = pkgplan::package_path::parse(reader.string());
+  static_cast<void>(pkgplan::package_release_identity::parse(reader.string()));
+  static_cast<void>(pkgplan::observation_set_identity::parse(reader.string()));
+
+  if (source_side == pkgplan::rejected_object_source_side::incoming) {
+    static_cast<void>(pkgplan::artifact_identity::parse(reader.string()));
+    static_cast<void>(pkgplan::artifact_manifest_identity::parse(reader.string()));
+    static_cast<void>(pkgimage::package_image_identity::parse(reader.string()));
+    const auto value = reader.u64();
+    if (value > std::numeric_limits<pkgimage::entry_id>::max())
+      throw_error(rejected_store_error_code::record_invalid, EOVERFLOW, {},
+                  "rejected-object entry identity is out of range");
+  }
+  else {
+    static_cast<void>(pkgplan::installed_package_identity::parse(reader.string()));
+    static_cast<void>(pkgplan::installed_control_identity::parse(reader.string()));
+  }
+
+  auto observation = read_observation(reader);
+  reader.finish();
+  if (observation.path() != path || observation.state() != fact_state::known ||
+      !observation.object())
+  {
+    throw_error(rejected_store_error_code::record_invalid, EINVAL, {},
+                "rejected-object observation binding is invalid");
+  }
+
+  const auto source =
+      source_side == pkgplan::rejected_object_source_side::incoming
+          ? rejected_object_source::incoming
+          : rejected_object_source::old;
+  const auto expected_provenance =
+      source == rejected_object_source::incoming
+          ? object_fact_provenance::incoming_image
+          : object_fact_provenance::rejected_capture;
+  if (observation.object()->provenance() != expected_provenance)
+    throw_error(rejected_store_error_code::record_invalid, EINVAL, {},
+                "rejected-object observation provenance is contradictory");
+
+  const bool incoming_reason =
+      reason == pkgplan::rejected_object_reason::install_policy_exclusion ||
+      reason == pkgplan::rejected_object_reason::upgrade_incoming_protected;
+  if (incoming_reason != (source == rejected_object_source::incoming))
+    throw_error(rejected_store_error_code::record_invalid, EINVAL, {},
+                "rejected-object reason contradicts its source side");
+
+  const auto identity = record_identity(body);
+  if (identity != expected_identity)
+    throw_error(rejected_store_error_code::binding_mismatch, EINVAL, {},
+                "rejected-object identity index binding mismatch");
+
+  return identified_record{attempt.identity(), std::move(plan), source, reason,
+                           std::move(observation), identity};
+}
+
+identified_record
+decode_identified_record(
+    const std::vector<std::byte>& bytes,
+    const rejected_object_record_identity& expected_identity)
+{
+  try {
+    return decode_identified_record_unchecked(bytes, expected_identity);
+  } catch (const rejected_store_error&) {
+    throw;
+  } catch (const std::invalid_argument&) {
+    throw_error(rejected_store_error_code::record_invalid, EINVAL, {},
+                "rejected-object record contains invalid canonical values");
+  }
+}
+
 std::string
 attempt_directory_name(const application_attempt& attempt)
 {
@@ -905,6 +1035,23 @@ std::string record_name(const pkgplan::package_path& path)
 std::string payload_name(const pkgplan::package_path& path)
 {
   return "payload-v1-" + path_key(path);
+}
+
+constexpr const char* identity_directory_name = "by-id-v1";
+
+std::string identity_key(const rejected_object_record_identity& identity)
+{
+  return hexadecimal(identity.bytes().data(), identity.bytes().size());
+}
+
+std::string identity_record_name(const rejected_object_record_identity& identity)
+{
+  return "record-v1-" + identity_key(identity);
+}
+
+std::string identity_payload_name(const rejected_object_record_identity& identity)
+{
+  return "payload-v1-" + identity_key(identity);
 }
 
 const char* source_directory_name(rejected_object_source source)
@@ -1084,6 +1231,78 @@ open_source_directory(int attempt_fd,
   require_directory(source_fd.get(), rejected_store_error_code::attempt_invalid,
                     "rejected-object source is not a directory");
   return source_fd;
+}
+
+unique_fd
+open_identity_directory(int store_fd, bool create)
+{
+  if (create &&
+      ::mkdirat(store_fd, identity_directory_name, private_directory_mode) != 0 &&
+      errno != EEXIST)
+  {
+    throw_error(rejected_store_error_code::identity_index_open_failed, errno,
+                identity_directory_name,
+                "cannot create rejected-object identity index");
+  }
+  unique_fd index_fd(open_at(
+      store_fd, identity_directory_name,
+      O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW));
+  if (index_fd.get() < 0) {
+    if (!create && errno == ENOENT)
+      return unique_fd();
+    throw_error(rejected_store_error_code::identity_index_open_failed, errno,
+                identity_directory_name,
+                "cannot open rejected-object identity index");
+  }
+  require_directory(index_fd.get(), rejected_store_error_code::identity_index_invalid,
+                    "rejected-object identity index is not a directory");
+  return index_fd;
+}
+
+bool
+same_inode(int lhs_directory_fd, const std::string& lhs_name,
+           int rhs_directory_fd, const std::string& rhs_name)
+{
+  struct stat lhs {};
+  struct stat rhs {};
+  if (::fstatat(lhs_directory_fd, lhs_name.c_str(), &lhs, AT_SYMLINK_NOFOLLOW) != 0 ||
+      ::fstatat(rhs_directory_fd, rhs_name.c_str(), &rhs, AT_SYMLINK_NOFOLLOW) != 0)
+  {
+    return false;
+  }
+  return S_ISREG(lhs.st_mode) && S_ISREG(rhs.st_mode) &&
+      lhs.st_dev == rhs.st_dev && lhs.st_ino == rhs.st_ino;
+}
+
+void
+publish_identity_link(int source_directory_fd, const std::string& source_name,
+                      int index_directory_fd, const std::string& index_name,
+                      const pkgplan::package_path& path)
+{
+  if (::linkat(source_directory_fd, source_name.c_str(),
+               index_directory_fd, index_name.c_str(), 0) == 0)
+    return;
+  if (errno == EEXIST && same_inode(source_directory_fd, source_name,
+                                    index_directory_fd, index_name))
+    return;
+  throw_error(rejected_store_error_code::record_publish_failed, errno,
+              path.string(),
+              "cannot publish rejected-object record identity index");
+}
+
+void
+publish_identity_index(int store_fd, int source_directory_fd,
+                       const pkgplan::package_path& path,
+                       const rejected_object_record_identity& identity,
+                       bool regular)
+{
+  unique_fd index_fd = open_identity_directory(store_fd, true);
+  if (regular)
+    publish_identity_link(source_directory_fd, payload_name(path),
+                          index_fd.get(), identity_payload_name(identity), path);
+  // The record link is the direct-lookup selector and is published last.
+  publish_identity_link(source_directory_fd, record_name(path),
+                        index_fd.get(), identity_record_name(identity), path);
 }
 
 bool
@@ -1426,45 +1645,51 @@ publish_regular_payload(int source_directory_fd,
 }
 
 unique_fd
-open_verified_payload(int source_directory_fd,
-                      const rejected_record& record)
+open_verified_payload_named(int directory_fd,
+                            const std::string& name,
+                            const application_path_observation& observation)
 {
-  if (!record.observation.object() ||
-      record.observation.object()->kind() != completed_object_kind::regular)
+  if (!observation.object() ||
+      observation.object()->kind() != completed_object_kind::regular)
   {
     throw_error(rejected_store_error_code::object_not_regular, EINVAL,
-                record.request.path().string(),
-                "rejected object is not regular");
+                observation.path().string(), "rejected object is not regular");
   }
-  const auto& object = *record.observation.object();
+  const auto& object = *observation.object();
   if (object.size().state() != fact_state::known || !object.size().value() ||
       object.regular_content().state() != fact_state::known ||
       !object.regular_content().value())
   {
     throw_error(rejected_store_error_code::record_invalid, EINVAL,
-                record.request.path().string(),
+                observation.path().string(),
                 "regular rejected record lacks payload facts");
   }
-  const std::string name = payload_name(record.request.path());
-  if (!same_regular_payload(source_directory_fd, name, *object.size().value(),
-                            *object.regular_content().value(),
-                            record.request.path()))
+  if (!same_regular_payload(directory_fd, name, *object.size().value(),
+                            *object.regular_content().value(), observation.path()))
   {
     throw_error(rejected_store_error_code::payload_mismatch, EINVAL,
-                record.request.path().string(),
+                observation.path().string(),
                 "rejected payload does not match its record");
   }
   unique_fd file(open_at(
-      source_directory_fd, name.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW));
+      directory_fd, name.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW));
   if (file.get() < 0)
     throw_error(rejected_store_error_code::payload_open_failed, errno,
-                record.request.path().string(),
+                observation.path().string(),
                 "cannot reopen verified rejected payload");
   if (::lseek(file.get(), 0, SEEK_SET) < 0)
     throw_error(rejected_store_error_code::payload_read_failed, errno,
-                record.request.path().string(),
+                observation.path().string(),
                 "cannot rewind verified rejected payload");
   return file;
+}
+
+unique_fd
+open_verified_payload(int source_directory_fd, const rejected_record& record)
+{
+  return open_verified_payload_named(source_directory_fd,
+                                     payload_name(record.request.path()),
+                                     record.observation);
 }
 
 rejected_object_source
@@ -1519,8 +1744,12 @@ publish_record(int store_fd,
                   request.path().string(),
                   "rejected-object record binding mismatch");
     }
-    if (record.observation.object()->kind() == completed_object_kind::regular)
+    const bool regular =
+        record.observation.object()->kind() == completed_object_kind::regular;
+    if (regular)
       static_cast<void>(open_verified_payload(source_fd.get(), record));
+    publish_identity_index(store_fd, source_fd.get(), request.path(),
+                           record.identity, regular);
     return rejected_object_publication_result(
         backend_operation_outcome::completed, record.identity,
         {record_evidence(existing)});
@@ -1547,6 +1776,7 @@ publish_record(int store_fd,
       rejected_store_error_code::record_write_failed,
       rejected_store_error_code::record_write_failed,
       rejected_store_error_code::record_publish_failed);
+  publish_identity_index(store_fd, source_fd.get(), request.path(), identity, regular);
   return rejected_object_publication_result(
       backend_operation_outcome::completed, identity,
       {record_evidence(encoded)});
@@ -1567,6 +1797,17 @@ public:
   unique_fd attempt_fd_;
   unique_fd source_fd_;
   rejected_record record_;
+};
+
+class identified_rejected_object::implementation final {
+public:
+  implementation(unique_fd index_fd, identified_record record)
+      : index_fd_(std::move(index_fd)), record_(std::move(record))
+  {
+  }
+
+  unique_fd index_fd_;
+  identified_record record_;
 };
 
 rejected_store_error::rejected_store_error(
@@ -1652,6 +1893,41 @@ published_rejected_object::identity() const noexcept
 rejected_regular_object published_rejected_object::open_regular() const
 {
   unique_fd file = open_verified_payload(state_->source_fd_.get(), state_->record_);
+  const auto size = *state_->record_.observation.object()->size().value();
+  return rejected_regular_object(file.release(), size);
+}
+
+identified_rejected_object::identified_rejected_object(
+    std::unique_ptr<implementation> state)
+    : state_(std::move(state))
+{
+}
+identified_rejected_object::identified_rejected_object(
+    identified_rejected_object&&) noexcept = default;
+identified_rejected_object& identified_rejected_object::operator=(
+    identified_rejected_object&&) noexcept = default;
+identified_rejected_object::~identified_rejected_object() = default;
+const application_attempt_identity&
+identified_rejected_object::attempt() const noexcept
+{ return state_->record_.attempt; }
+const pkgplan::operation_plan_identity&
+identified_rejected_object::plan() const noexcept
+{ return state_->record_.plan; }
+rejected_object_source identified_rejected_object::source() const noexcept
+{ return state_->record_.source; }
+pkgplan::rejected_object_reason identified_rejected_object::reason() const noexcept
+{ return state_->record_.reason; }
+const application_path_observation&
+identified_rejected_object::observation() const noexcept
+{ return state_->record_.observation; }
+const rejected_object_record_identity&
+identified_rejected_object::identity() const noexcept
+{ return state_->record_.identity; }
+rejected_regular_object identified_rejected_object::open_regular() const
+{
+  unique_fd file = open_verified_payload_named(
+      state_->index_fd_.get(), identity_payload_name(state_->record_.identity),
+      state_->record_.observation);
   const auto size = *state_->record_.observation.object()->size().value();
   return rejected_regular_object(file.release(), size);
 }
@@ -1861,6 +2137,32 @@ application_rejected_object_store::load(
           std::move(attempt_fd), std::move(source_fd), std::move(record)));
 }
 
+std::optional<identified_rejected_object>
+application_rejected_object_store::load_identified(
+    const rejected_object_record_identity& identity) const
+{
+  if (directory_fd_ < 0)
+    throw rejected_store_error(
+        rejected_store_error_code::directory_invalid, EBADF, {},
+        "rejected-object store is not open");
+  unique_fd index_fd = open_identity_directory(directory_fd_, false);
+  if (index_fd.get() < 0)
+    return std::nullopt;
+  const std::string name = identity_record_name(identity);
+  auto bytes = read_file(
+      index_fd.get(), name, rejected_store_error_code::record_read_failed,
+      rejected_store_error_code::record_read_failed, maximum_record_size, true);
+  if (bytes.empty())
+    return std::nullopt;
+  auto record = decode_identified_record(bytes, identity);
+  if (record.observation.object()->kind() == completed_object_kind::regular)
+    static_cast<void>(open_verified_payload_named(
+        index_fd.get(), identity_payload_name(identity), record.observation));
+  return identified_rejected_object(
+      std::make_unique<identified_rejected_object::implementation>(
+          std::move(index_fd), std::move(record)));
+}
+
 void application_rejected_object_store::synchronize(
     const application_attempt& attempt) const
 {
@@ -1883,6 +2185,11 @@ void application_rejected_object_store::synchronize(
                      rejected_store_error_code::namespace_sync_failed,
                      "cannot synchronize rejected-object source directory");
   }
+  unique_fd index_fd = open_identity_directory(directory_fd_, false);
+  if (index_fd.get() >= 0)
+    synchronize_fd(index_fd.get(),
+                   rejected_store_error_code::namespace_sync_failed,
+                   "cannot synchronize rejected-object identity index");
   synchronize_fd(attempt_fd.get(),
                  rejected_store_error_code::namespace_sync_failed,
                  "cannot synchronize rejected-object attempt directory");

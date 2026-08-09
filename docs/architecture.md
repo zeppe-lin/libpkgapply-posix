@@ -29,7 +29,7 @@ The library owns:
 - caller-held target mutation leases;
 - attempt-bound incoming payload staging;
 - pre-mutation old-object capture;
-- immutable rejected-object publication;
+- immutable rejected-object publication and direct record-identity reopening;
 - atomic journal and restart-checkpoint stores;
 - immutable completed-evidence publication;
 - active namespace mutation and recovery; and

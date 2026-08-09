@@ -9,7 +9,7 @@ After changing a manual, regenerate its mirror with:
 ```sh
 python3 tools/render-man-markdown.py \
   man/NAME.scdoc docs/man/NAME.md \
-  --project libpkgapply-posix --version 3.1.0
+  --project libpkgapply-posix --version 3.2.0
 ```
 
 `tools/check-man-markdown.py` rejects missing, extra, or stale mirrors.

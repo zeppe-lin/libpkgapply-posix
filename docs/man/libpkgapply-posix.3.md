@@ -1,4 +1,4 @@
-% LIBPKGAPPLY-POSIX(3) libpkgapply-posix | Version 3.1.0
+% LIBPKGAPPLY-POSIX(3) libpkgapply-posix | Version 3.2.0
 
 <!-- Generated from libpkgapply-posix.3.scdoc; do not edit. -->
 
@@ -100,6 +100,13 @@ application-request identity. **load_active()** follows only that index and then
 validates the named journal against the request. It does not scan journals,
 select a newest attempt, or reconstruct caller policy from storage order. The
 index is replaced only after the referenced journal snapshot is durable.
+
+The rejected-object store likewise retains a direct index keyed by canonical
+rejected-object record identity. **load_identified()** follows only that identity
+and returns self-contained immutable evidence after validating the record and any
+regular payload. It does not scan rejected storage, depend on the application
+journal, or reconstruct a planner command. Request-bound application restart
+continues to use the stricter rejected-store **load()** operation.
 
 # DURABILITY
 

@@ -137,6 +137,69 @@ absent(const std::string& path)
   return ::lstat(path.c_str(), &status) != 0 && errno == ENOENT;
 }
 
+void
+set_mtime(const std::string& path, time_t seconds)
+{
+  const struct timespec times[2] = {
+      {0, UTIME_OMIT},
+      {seconds, 0},
+  };
+  require(::utimensat(AT_FDCWD, path.c_str(), times, 0) == 0,
+          "cannot set active removal directory mtime");
+}
+
+void
+test_descendant_removal_preserves_ancestor_authority()
+{
+  temporary_directory root;
+  make_directory(root.path() + "/usr");
+  make_directory(root.path() + "/usr/bin");
+  write_file(root.path() + "/usr/bin/tool", "old");
+  set_mtime(root.path() + "/usr/bin", 100);
+  set_mtime(root.path() + "/usr", 101);
+
+  const std::vector<pkgplan::package_path> paths = {
+      pkgplan::package_path::parse("usr"),
+      pkgplan::package_path::parse("usr/bin"),
+      pkgplan::package_path::parse("usr/bin/tool"),
+  };
+  auto observer =
+      pkgapply::posix::application_target_observer::open(root.path());
+  auto before = observer.observe(paths).observations();
+  const auto active_attempt = attempt(60);
+  const int root_descriptor = ::open(
+      root.path().c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+  require(root_descriptor >= 0,
+          "cannot open descendant removal target root");
+
+  {
+    auto active =
+        pkgapply::posix::detail::application_active_namespace::
+            bind_without_incoming(root_descriptor, active_attempt, before);
+    require(active.remove(remove_object("usr/bin/tool")).outcome() ==
+                pkgapply::backend_operation_outcome::completed,
+            "descendant file removal did not complete");
+  }
+
+  auto reopened =
+      pkgapply::posix::detail::application_active_namespace::
+          bind_without_incoming(root_descriptor, active_attempt, before);
+  reopened.retain_completed_effect(
+      remove_object("usr/bin/tool"),
+      pkgapply::backend_operation_result(
+          pkgapply::backend_operation_outcome::completed));
+  require(reopened.remove(remove_directory("usr/bin")).outcome() ==
+              pkgapply::backend_operation_outcome::completed,
+          "restart lost ancestor authority after descendant removal");
+  require(reopened.remove(remove_directory("usr")).outcome() ==
+              pkgapply::backend_operation_outcome::completed,
+          "self-induced ancestor metadata drift blocked directory removal");
+  require(absent(root.path() + "/usr"),
+          "nested removal did not remove the admitted directory chain");
+  require(::close(root_descriptor) == 0,
+          "cannot close descendant removal target root");
+}
+
 } // namespace
 
 extern "C" int
@@ -152,6 +215,8 @@ fsync(int descriptor)
 int
 main()
 {
+  test_descendant_removal_preserves_ancestor_authority();
+
   temporary_directory root;
   make_directory(root.path() + "/usr");
   make_directory(root.path() + "/usr/bin");

@@ -80,7 +80,7 @@ private:
       const pkgplan::package_path& path) const noexcept;
   void retain_effect(const pkgplan::package_path& path, bool incoming);
   void complete_effect(const pkgplan::package_path& path, bool incoming);
-  [[nodiscard]] bool refresh_incoming_ancestor_directories(
+  [[nodiscard]] bool refresh_ancestor_directories(
       const pkgplan::package_path& changed_path);
 
   struct attempted_effect final {

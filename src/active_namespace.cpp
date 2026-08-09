@@ -1172,31 +1172,125 @@ void application_active_namespace::complete_effect(
   found->completed = true;
 }
 
-bool application_active_namespace::refresh_incoming_ancestor_directories(
+namespace {
+
+struct admitted_directory_refresh final {
+  bool succeeded;
+  bool changed;
+};
+
+[[nodiscard]] admitted_directory_refresh
+restore_admitted_directory_metadata(
+    int descriptor,
+    const completed_object_fact& object)
+{
+  if (object.kind() != completed_object_kind::directory)
+    throw std::logic_error("admitted ancestor is not a directory");
+
+  const auto mode = known_value(
+      object.mode(), "admitted directory lacks exact mode");
+  const auto uid = known_value(
+      object.uid(), "admitted directory lacks exact uid");
+  const auto gid = known_value(
+      object.gid(), "admitted directory lacks exact gid");
+  const auto mtime = known_value(
+      object.mtime(), "admitted directory lacks exact mtime");
+
+  struct stat before {};
+  if (::fstat(descriptor, &before) != 0 || !S_ISDIR(before.st_mode) ||
+      static_cast<std::uint32_t>(before.st_mode & 07777) !=
+          (mode & 07777U) ||
+      static_cast<std::uint64_t>(before.st_uid) != uid ||
+      static_cast<std::uint64_t>(before.st_gid) != gid)
+  {
+    return {false, false};
+  }
+
+  if (before.st_mtim.tv_sec == mtime.seconds &&
+      static_cast<std::uint32_t>(before.st_mtim.tv_nsec) ==
+          mtime.nanoseconds)
+  {
+    return {true, false};
+  }
+
+  const struct timespec times[2] = {
+      {0, UTIME_OMIT},
+      {mtime.seconds, static_cast<long>(mtime.nanoseconds)},
+  };
+  if (::futimens(descriptor, times) != 0)
+    return {false, false};
+
+  struct stat after {};
+  if (::fstat(descriptor, &after) != 0 || !S_ISDIR(after.st_mode) ||
+      static_cast<std::uint32_t>(after.st_mode & 07777) !=
+          (mode & 07777U) ||
+      static_cast<std::uint64_t>(after.st_uid) != uid ||
+      static_cast<std::uint64_t>(after.st_gid) != gid ||
+      after.st_mtim.tv_sec != mtime.seconds ||
+      static_cast<std::uint32_t>(after.st_mtim.tv_nsec) !=
+          mtime.nanoseconds)
+  {
+    return {false, false};
+  }
+  return {true, true};
+}
+
+} // namespace
+
+bool application_active_namespace::refresh_ancestor_directories(
     const pkgplan::package_path& changed_path)
 {
-  if (incoming_image_ == nullptr)
-    return true;
+  if (incoming_image_ != nullptr) {
+    for (const auto& effect : effects_) {
+      if (!effect.incoming || !effect.completed ||
+          !effect.path.is_ancestor_of(changed_path))
+        continue;
 
-  for (const auto& effect : effects_) {
-    if (!effect.incoming || !effect.completed ||
-        !effect.path.is_ancestor_of(changed_path))
+      const auto* entry = incoming_image_->find(
+          pkgimage::package_path::parse(effect.path.string()));
+      if (entry == nullptr || entry->type != pkgimage::entry_type::directory)
+        throw std::logic_error(
+            "completed incoming ancestor is not a package directory");
+
+      active_path_workspace workspace = workspace_.open(effect.path);
+      unique_fd directory(::openat(
+          workspace.parent_descriptor(), workspace.leaf().c_str(),
+          O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW));
+      if (directory.get() < 0 ||
+          !apply_descriptor_metadata(directory.get(), *entry))
+        return false;
+      retain_dirty_descriptor(directory.release());
+    }
+  }
+
+  for (const auto& observation : admitted_) {
+    if (!observation.path().is_ancestor_of(changed_path) ||
+        observation.state() != fact_state::known || !observation.object())
       continue;
 
-    const auto* entry = incoming_image_->find(
-        pkgimage::package_path::parse(effect.path.string()));
-    if (entry == nullptr || entry->type != pkgimage::entry_type::directory)
-      throw std::logic_error(
-          "completed incoming ancestor is not a package directory");
+    const bool incoming = std::any_of(
+        effects_.begin(), effects_.end(),
+        [&observation](const attempted_effect& effect) {
+          return effect.incoming && effect.completed &&
+              effect.path == observation.path();
+        });
+    if (incoming)
+      continue;
 
-    active_path_workspace workspace = workspace_.open(effect.path);
+    active_path_workspace workspace = workspace_.open(observation.path());
     unique_fd directory(::openat(
         workspace.parent_descriptor(), workspace.leaf().c_str(),
         O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW));
-    if (directory.get() < 0 ||
-        !apply_descriptor_metadata(directory.get(), *entry))
+    if (directory.get() < 0)
       return false;
-    retain_dirty_descriptor(directory.release());
+
+    const admitted_directory_refresh refreshed =
+        restore_admitted_directory_metadata(
+            directory.get(), *observation.object());
+    if (!refreshed.succeeded)
+      return false;
+    if (refreshed.changed)
+      retain_dirty_descriptor(directory.release());
   }
   return true;
 }
@@ -1288,7 +1382,7 @@ backend_operation_result application_active_namespace::publish_incoming(
         update_existing_directory(*this, workspace, entry);
     if (result.outcome() == backend_operation_outcome::completed) {
       complete_effect(request.path(), true);
-      if (!refresh_incoming_ancestor_directories(request.path()))
+      if (!refresh_ancestor_directories(request.path()))
         return operation(backend_operation_outcome::indeterminate);
     }
     return result;
@@ -1332,7 +1426,7 @@ backend_operation_result application_active_namespace::publish_incoming(
     retain_dirty_descriptor(published.parent_descriptor);
   if (published.result.outcome() == backend_operation_outcome::completed) {
     complete_effect(request.path(), true);
-    if (!refresh_incoming_ancestor_directories(request.path()))
+    if (!refresh_ancestor_directories(request.path()))
       return operation(backend_operation_outcome::indeterminate);
   }
   return std::move(published.result);
@@ -1393,7 +1487,7 @@ backend_operation_result application_active_namespace::remove(
     if (parent >= 0)
       retain_dirty_descriptor(parent);
     complete_effect(request.path(), false);
-    if (!refresh_incoming_ancestor_directories(request.path()))
+    if (!refresh_ancestor_directories(request.path()))
       return operation(backend_operation_outcome::indeterminate);
     return operation(backend_operation_outcome::completed);
   }
@@ -1418,7 +1512,7 @@ backend_operation_result application_active_namespace::recover(
   const active_workspace_snapshot snapshot = workspace.inspect();
   const auto completed_recovery = [&]() {
     if (!still_admitted(workspace_, *before) ||
-        !refresh_incoming_ancestor_directories(path))
+        !refresh_ancestor_directories(path))
       return operation(backend_operation_outcome::indeterminate);
     return operation(backend_operation_outcome::completed);
   };
@@ -1589,7 +1683,7 @@ backend_operation_result application_active_namespace::discard_recovery(
   const int parent = duplicate_fd(workspace.parent_descriptor());
   if (parent >= 0)
     retain_dirty_descriptor(parent);
-  if (!refresh_incoming_ancestor_directories(path))
+  if (!refresh_ancestor_directories(path))
     return operation(backend_operation_outcome::indeterminate);
   return operation(backend_operation_outcome::completed);
 }

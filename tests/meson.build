@@ -84,7 +84,7 @@ if get_option('tests').allowed()
     ['active-recovery', 'mechanism/posix_active_recovery_test.cpp', internal_crypto_test_deps],
     ['active-removal', 'mechanism/posix_active_removal_test.cpp', [libpkgapply_posix_internal_test_dep]],
     ['active-workspace', 'mechanism/posix_active_workspace_test.cpp', [libpkgapply_posix_internal_test_dep]],
-    ['capture-store', 'mechanism/posix_capture_store_test.cpp', [libpkgapply_posix_dep]],
+    ['capture-store', 'mechanism/posix_capture_store_test.cpp', crypto_test_deps],
     ['checkpoint-store', 'mechanism/posix_checkpoint_store_test.cpp', fixture_test_deps],
     ['completed-evidence-store', 'mechanism/posix_completed_evidence_store_test.cpp', fixture_test_deps],
     ['journal-store', 'mechanism/posix_journal_store_test.cpp', [libpkgapply_posix_dep]],

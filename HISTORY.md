@@ -7,6 +7,10 @@
   or requiring retained application-journal authority.
 - Published regular payload index authority before the record selector and repair
   the index on exact rejected-object republication after interrupted publication.
+- Translate malformed canonical capture records back into the provider-owned
+  `capture_store_error` domain instead of leaking semantic constructor errors.
+- Qualify the provider against `libpkgapply` ABI generation 3 and the current
+  source, catalog, state, planner, and source-plan owner generations.
 - Kept request-bound restart loading unchanged and preserved
   `libpkgapply-posix.so.2` / API generation 2 as an additive release.
 

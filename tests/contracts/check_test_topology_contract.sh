@@ -90,4 +90,11 @@ grep -F 'application_durability_status::unconfirmed' \
   "$root/tests/mechanism/posix_active_removal_test.cpp" >/dev/null ||
   fail 'active-namespace fault is not classified as unconfirmed'
 
+grep -F 'corrupt_record_path' \
+  "$root/tests/mechanism/posix_capture_store_test.cpp" >/dev/null ||
+  fail 'capture-store corruption regression is missing'
+grep -F 'capture_store_error_code::record_invalid' \
+  "$root/tests/mechanism/posix_capture_store_test.cpp" >/dev/null ||
+  fail 'capture-store corruption regression does not require typed failure'
+
 echo 'test-topology-contract: ok'

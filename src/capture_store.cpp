@@ -709,28 +709,38 @@ captured_record
 decode_record(const std::vector<std::byte>& bytes,
               const application_attempt& attempt)
 {
-  const auto body = unframe(bytes, record_magic);
-  byte_reader reader(body);
-  require_attempt_body(reader, attempt);
-  auto path = pkgplan::package_path::parse(reader.string());
-  const auto rejected = reader.u8();
-  const auto recovery = reader.u8();
-  const auto exact = reader.u8();
-  if (rejected > 1U || recovery > 1U || exact > 1U ||
-      (rejected == 0U && recovery == 0U))
-  {
-    throw_error(capture_store_error_code::record_invalid, EINVAL, {},
-                "private capture record has invalid flags");
+  try {
+    const auto body = unframe(bytes, record_magic);
+    byte_reader reader(body);
+    require_attempt_body(reader, attempt);
+    auto path = pkgplan::package_path::parse(reader.string());
+    const auto rejected = reader.u8();
+    const auto recovery = reader.u8();
+    const auto exact = reader.u8();
+    if (rejected > 1U || recovery > 1U || exact > 1U ||
+        (rejected == 0U && recovery == 0U))
+    {
+      throw_error(capture_store_error_code::record_invalid, EINVAL, {},
+                  "private capture record has invalid flags");
+    }
+    auto observation = read_observation(reader);
+    reader.finish();
+    if (observation.path() != path || observation.state() != fact_state::known)
+      throw_error(capture_store_error_code::record_invalid, EINVAL, {},
+                  "private capture record has invalid observation binding");
+    return captured_record{
+        attempt,
+        old_object_capture_request(
+            std::move(path), rejected != 0U, recovery != 0U),
+        std::move(observation), exact != 0U};
   }
-  auto observation = read_observation(reader);
-  reader.finish();
-  if (observation.path() != path || observation.state() != fact_state::known)
+  catch (const capture_store_error&) {
+    throw;
+  }
+  catch (const std::invalid_argument&) {
     throw_error(capture_store_error_code::record_invalid, EINVAL, {},
-                "private capture record has invalid observation binding");
-  return captured_record{
-      attempt,
-      old_object_capture_request(std::move(path), rejected != 0U, recovery != 0U),
-      std::move(observation), exact != 0U};
+                "private capture record contains invalid canonical values");
+  }
 }
 
 std::string

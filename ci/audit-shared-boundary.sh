@@ -22,7 +22,7 @@ printf '%s\n' "$output" | grep -F \
 }
 needed=$(printf '%s\n' "$output" | grep 'Shared library:' || true)
 for dependency in \
-  'libpkgapply.so.2' \
+  'libpkgapply.so.3' \
   'libpkgimage.so.1' \
   'libpkgplan.so.1'
 do

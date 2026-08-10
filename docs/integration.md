@@ -10,6 +10,12 @@ The public metadata exposes `libpkgapply >= 3.0.0` and
 Direct `libpkgplan >= 0.3.0` use and `libcrypto` remain private implementation
 requirements and enter consumer flags only for static linkage.
 
+The qualified shared closure binds `libpkgapply >= 3.0.0` to semantic-core ABI
+generation 3 (`libpkgapply.so.3`). `libpkgapply-posix.so.2` remains the provider
+ABI generation; callers must clean-rebuild the provider when replacing the
+pre-release core object so its dynamic dependency names the corrected core
+SONAME.
+
 Repository separation is intentional. A non-POSIX backend may implement the
 same `libpkgapply` contracts without inheriting POSIX storage layout, system
 calls, or failure categories. Rejected-object record identity becomes a direct

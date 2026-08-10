@@ -72,22 +72,22 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgplan
-          ref: v0.3.0
+          ref: v0.3.1
           path: dependencies/libpkgplan
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgsource
-          ref: v3.0.0
+          ref: v3.0.1
           path: dependencies/libpkgsource
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgstate
-          ref: v3.0.0
+          ref: v3.1.0
           path: dependencies/libpkgstate
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgcatalog
-          ref: v3.0.0
+          ref: v3.0.1
           path: dependencies/libpkgcatalog
       - uses: actions/checkout@v4
         with:
@@ -97,7 +97,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgsource-plan
-          ref: v1.0.0
+          ref: v1.1.0
           path: dependencies/libpkgsource-plan
       - uses: actions/checkout@v4
         with:
@@ -188,22 +188,22 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgplan
-          ref: v0.3.0
+          ref: v0.3.1
           path: dependencies/libpkgplan
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgsource
-          ref: v3.0.0
+          ref: v3.0.1
           path: dependencies/libpkgsource
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgstate
-          ref: v3.0.0
+          ref: v3.1.0
           path: dependencies/libpkgstate
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgcatalog
-          ref: v3.0.0
+          ref: v3.0.1
           path: dependencies/libpkgcatalog
       - uses: actions/checkout@v4
         with:
@@ -213,7 +213,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgsource-plan
-          ref: v1.0.0
+          ref: v1.1.0
           path: dependencies/libpkgsource-plan
       - uses: actions/checkout@v4
         with:

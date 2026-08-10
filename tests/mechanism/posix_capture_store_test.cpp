@@ -4,18 +4,24 @@
 #include <libpkgapply-posix/capture_store.h>
 #include <libpkgapply-posix/target_observer.h>
 
+#include <algorithm>
 #include <array>
 #include <cerrno>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <fcntl.h>
 #include <iostream>
+#include <iterator>
+#include <openssl/evp.h>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <vector>
 
 namespace {
 
@@ -124,6 +130,71 @@ std::string read_descriptor(int fd)
   return result;
 }
 
+std::filesystem::path capture_record(const std::string& storage)
+{
+  std::filesystem::path attempt;
+  for (const auto& entry : std::filesystem::directory_iterator(storage)) {
+    const auto name = entry.path().filename().string();
+    if (entry.is_directory() && name.rfind("capture-v1-", 0) == 0) {
+      require(attempt.empty(), "capture test found multiple attempt directories");
+      attempt = entry.path();
+    }
+  }
+  require(!attempt.empty(), "capture test attempt directory is absent");
+
+  std::filesystem::path record;
+  for (const auto& entry : std::filesystem::directory_iterator(attempt)) {
+    const auto name = entry.path().filename().string();
+    if (entry.is_regular_file() && name.rfind("record-v1-", 0) == 0) {
+      require(record.empty(), "capture test found multiple record files");
+      record = entry.path();
+    }
+  }
+  require(!record.empty(), "capture test record is absent");
+  return record;
+}
+
+void corrupt_record_path(const std::string& storage, std::string_view path)
+{
+  const auto record = capture_record(storage);
+  std::ifstream input(record, std::ios::binary);
+  require(input.good(), "cannot open capture record for corruption");
+  std::vector<unsigned char> bytes{
+      std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+  require(!input.bad(), "cannot read capture record for corruption");
+
+  constexpr std::size_t checksum_offset = 8U + 2U + 8U;
+  constexpr std::size_t body_offset = checksum_offset + 32U;
+  require(bytes.size() > body_offset, "capture record is unexpectedly short");
+
+  const auto found = std::search(
+      bytes.begin() + static_cast<std::ptrdiff_t>(body_offset), bytes.end(),
+      path.begin(), path.end());
+  require(found != bytes.end(), "capture record path is absent");
+  *found = static_cast<unsigned char>('/');
+
+  EVP_MD_CTX* context = EVP_MD_CTX_new();
+  require(context != nullptr, "cannot allocate capture test digest context");
+  std::array<unsigned char, 32> digest{};
+  unsigned int digest_size = 0;
+  const bool hashed =
+      EVP_DigestInit_ex(context, EVP_sha256(), nullptr) == 1 &&
+      EVP_DigestUpdate(
+          context, bytes.data() + body_offset, bytes.size() - body_offset) == 1 &&
+      EVP_DigestFinal_ex(context, digest.data(), &digest_size) == 1;
+  EVP_MD_CTX_free(context);
+  require(hashed && digest_size == digest.size(),
+          "cannot recompute capture record checksum");
+  std::copy(digest.begin(), digest.end(), bytes.begin() + checksum_offset);
+
+  std::ofstream output(record, std::ios::binary | std::ios::trunc);
+  require(output.good(), "cannot rewrite corrupt capture record");
+  output.write(
+      reinterpret_cast<const char*>(bytes.data()),
+      static_cast<std::streamsize>(bytes.size()));
+  require(output.good(), "cannot finish corrupt capture record");
+}
+
 } // namespace
 
 int main()
@@ -194,6 +265,30 @@ int main()
 
   store.synchronize(admitted_attempt);
 
+  temporary_directory corrupt_storage("libpkgapply-capture-corrupt-store");
+  auto corrupt_store = pkgapply::posix::application_capture_store::open(
+      corrupt_storage.path(), target.path());
+  const auto later_path = pkgplan::package_path::parse("usr/bin/later");
+  const pkgapply::old_object_capture_request later_request(
+      later_path, false, true);
+  const auto corrupt_result = corrupt_store.capture(
+      admitted_attempt, later_request, find(batch, "usr/bin/later"));
+  require(corrupt_result.outcome() ==
+              pkgapply::backend_operation_outcome::completed,
+          "capture corruption fixture was not published");
+  corrupt_record_path(corrupt_storage.path(), "usr/bin/later");
+  bool corrupt_record_rejected = false;
+  try {
+    static_cast<void>(corrupt_store.load(
+        admitted_attempt, later_request, find(batch, "usr/bin/later")));
+  }
+  catch (const pkgapply::posix::capture_store_error& error) {
+    corrupt_record_rejected =
+        error.code() == pkgapply::posix::capture_store_error_code::record_invalid;
+  }
+  require(corrupt_record_rejected,
+          "malformed capture record escaped the provider error domain");
+
   require(::unlink((bin + "/tool").c_str()) == 0,
           "cannot remove captured target object");
   write_file(bin + "/tool", "changed", 0600);
@@ -259,9 +354,6 @@ int main()
   require(::rename(target.path().c_str(), moved_target.c_str()) == 0,
           "cannot rename capture target root");
 
-  const auto later_path = pkgplan::package_path::parse("usr/bin/later");
-  const pkgapply::old_object_capture_request later_request(
-      later_path, false, true);
   const auto later_result = anchored.capture(
       admitted_attempt, later_request, find(batch, "usr/bin/later"));
   require(later_result.outcome() == pkgapply::backend_operation_outcome::completed &&

@@ -78,7 +78,11 @@ Capture reload verifies attempt, path, purpose, admitted observation, record
 checksum, regular file type, size, stable descriptor interval, and content
 identity before granting a read-only payload descriptor. Exact republication is
 idempotent and does not reread a target that may already have changed. Namespace
-synchronization remains a separate backend durability operation.
+synchronization remains a separate backend durability operation. A
+checksum-valid record whose canonical path or object facts cannot be admitted by
+the semantic core is still corrupt provider storage and is translated to
+`capture_store_error_code::record_invalid`; semantic constructor exceptions do
+not escape the capture-store boundary.
 
 The POSIX rejected-object store is a separate attempt-scoped authority. Its
 immutable binding commits to the application-attempt identity, request identity,

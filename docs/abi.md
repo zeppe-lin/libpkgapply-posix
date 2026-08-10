@@ -4,6 +4,14 @@ The additive 3.2.0 release preserves `libpkgapply-posix.so.2`. The SONAME
 belongs to the already-published in-tree POSIX ABI generation; repository
 extraction does not manufacture an ABI break.
 
+`libpkgapply` 3.0.0 is semantic-core ABI generation 3 and is linked as
+`libpkgapply.so.3`. That dependency transition does not by itself advance the
+provider SONAME: the POSIX callable/RTTI surface remains the reviewed additive
+generation-2 surface, and the core polymorphic interfaces inherited by the
+provider retain their virtual protocol shape. Shared-boundary qualification
+therefore requires provider SONAME 2 together with semantic-core NEEDED entry
+`libpkgapply.so.3`.
+
 Public classes carry `PKGAPPLY_POSIX_API`. Compilation is hidden by default and
 an exact reviewed ELF manifest is converted into the linker version script.
 The manifest contains the installed callable surface and the required public

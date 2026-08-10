@@ -40,3 +40,10 @@ grep -F 'libcrypto_dep' "$root/src/meson.build" >/dev/null || \
 grep -F 'libpkgapply_posix_sources = files(' "$root/src/meson.build" >/dev/null ||   fail 'production implementation source set is not explicit'
 grep -F "'pkgapply-posix-test-implementation'" "$root/tests/meson.build" >/dev/null ||   fail 'private mechanism test target is absent'
 grep -F 'libpkgapply_posix_internal_test_dep' "$root/tests/meson.build" >/dev/null ||   fail 'white-box tests do not have a private implementation dependency'
+
+grep -F 'catch (const std::invalid_argument&)' \
+  "$root/src/capture_store.cpp" >/dev/null ||
+  fail 'capture-record canonical failures escape the provider domain'
+grep -F 'private capture record contains invalid canonical values' \
+  "$root/src/capture_store.cpp" >/dev/null ||
+  fail 'capture-record canonical failure translation is absent'

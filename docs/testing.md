@@ -45,7 +45,8 @@ The evidence roles are distinct:
    release metadata, and the test-role topology itself.
 
 Installed shared and static consumers use only pkg-config output. Shared-library
-audits verify SONAME 2, direct dependency closure, exact callable and RTTI/vtable
+audits verify provider SONAME 2, semantic-core NEEDED entry
+`libpkgapply.so.3`, direct dependency closure, exact callable and RTTI/vtable
 exports, symbol versioning, and absence of non-`pkgapply::posix` C++ exports.
 
 Sanitizer jobs build the complete dependency chain with ASan and UBSan. Tests

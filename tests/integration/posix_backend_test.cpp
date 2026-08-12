@@ -400,7 +400,7 @@ int main()
       journal_transaction->attempt_nonce());
   const auto header = pkgapply::application_journal_header::make(
       pkgplan::operation_kind::install, request.identity(), plan.identity(),
-      attempt, target.identity(), request.control().identity(), state.identity(),
+      attempt, target.identity(), request.control().identity(), state,
       lease.identity(), backend->identity());
   const auto unpublished_journal = pkgapply::application_journal_record::make(
       header, pkgapply::application_journal_state::preparing, {}, {});
@@ -455,8 +455,8 @@ int main()
   const auto removal_header = pkgapply::application_journal_header::make(
       pkgplan::operation_kind::remove, removal_request.identity(),
       removal_plan.identity(), removal_attempt, target.identity(),
-      removal_request.control().identity(), removal_state.identity(),
-      lease.identity(), backend->identity());
+      removal_request.control().identity(), removal_state, lease.identity(),
+      backend->identity());
   const auto removal_journal = removal_transaction->publish_journal(
       pkgapply::application_journal_record::make(
           removal_header, pkgapply::application_journal_state::preparing, {}, {}));

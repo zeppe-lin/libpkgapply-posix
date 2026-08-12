@@ -50,6 +50,33 @@ Identity planning_identity(std::uint8_t value)
   return Identity::from_sha256(bytes);
 }
 
+pkgapply::lease_bound_state_projection state_projection(std::uint8_t seed)
+{
+  const auto lease = application_identity<
+      pkgapply::mutation_lease_instance_identity>(seed + 6);
+  return pkgapply::lease_bound_state_projection::make(
+      lease,
+      planning_identity<pkgplan::installed_state_snapshot_identity>(seed + 5),
+      planning_identity<pkgplan::ownership_inventory_identity>(seed + 7),
+      pkgapply::state_projection_completeness::complete,
+      {pkgapply::projected_path_owners(
+          pkgplan::package_path::parse("usr/bin/tool"),
+          {planning_identity<pkgplan::installed_package_identity>(seed + 9)})},
+      application_identity<pkgapply::state_projection_evidence_identity>(
+          seed + 8));
+}
+
+bool same_projection(const pkgapply::lease_bound_state_projection& lhs,
+                     const pkgapply::lease_bound_state_projection& rhs)
+{
+  return lhs.schema_version() == rhs.schema_version() &&
+         lhs.identity() == rhs.identity() && lhs.lease() == rhs.lease() &&
+         lhs.snapshot() == rhs.snapshot() &&
+         lhs.ownership_inventory() == rhs.ownership_inventory() &&
+         lhs.completeness() == rhs.completeness() &&
+         lhs.paths() == rhs.paths() && lhs.evidence() == rhs.evidence();
+}
+
 pkgapply::application_journal_header header(
     std::uint8_t request_seed = 1,
     std::uint8_t attempt_seed = 1)
@@ -66,6 +93,7 @@ pkgapply::application_journal_header header(
   const auto attempt = pkgapply::application_attempt::make(
       request, target, backend,
       pkgapply::application_attempt_nonce::from_bytes(nonce));
+  const auto projection = state_projection(request_seed);
   return pkgapply::application_journal_header::make(
       pkgplan::operation_kind::install,
       request,
@@ -74,10 +102,8 @@ pkgapply::application_journal_header header(
       target,
       application_identity<
           pkgapply::application_execution_control_identity>(request_seed + 4),
-      application_identity<
-          pkgapply::lease_bound_state_projection_identity>(request_seed + 5),
-      application_identity<
-          pkgapply::mutation_lease_instance_identity>(request_seed + 6),
+      projection,
+      projection.lease(),
       backend);
 }
 
@@ -172,10 +198,17 @@ int main()
   const auto published_initial = store.publish(initial);
   require(published_initial.identity() == initial.identity(),
           "journal store changed the initial snapshot");
+  require(same_projection(
+              published_initial.header().admitted_state_projection(),
+              initial.header().admitted_state_projection()),
+          "journal store changed admitted state-projection evidence");
 
   const auto loaded_initial = store.load(initial.header().identity());
   require(loaded_initial && loaded_initial->identity() == initial.identity(),
           "journal store did not load the initial snapshot");
+  require(same_projection(loaded_initial->header().admitted_state_projection(),
+                          initial.header().admitted_state_projection()),
+          "journal store did not retain admitted state-projection evidence");
   const auto duplicated_initial =
       duplicated.load(initial.header().identity());
   require(duplicated_initial &&

@@ -202,13 +202,22 @@ pkgapply::application_journal_record publish_preparing_journal(
   const auto attempt = pkgapply::application_attempt::make(
       request.identity(), request.target().identity(), transaction.backend(),
       transaction.attempt_nonce());
+  std::vector<pkgapply::projected_path_owners> projected_paths;
+  projected_paths.reserve(request.plan().preconditions().paths().size());
+  for (const auto& expected : request.plan().preconditions().paths()) {
+    projected_paths.emplace_back(expected.path(), expected.owners());
+  }
+  const auto state_projection = pkgapply::lease_bound_state_projection::make(
+      lease.identity(), request.plan().preconditions().installed_snapshot(),
+      request.plan().preconditions().ownership_inventory(),
+      pkgapply::state_projection_completeness::complete,
+      std::move(projected_paths),
+      pkgapply::test::checkpoint_fixture::application_identity<
+          pkgapply::state_projection_evidence_identity>(state_projection_seed));
   const auto header = pkgapply::application_journal_header::make(
       request.plan().kind(), request.identity(), request.plan().identity(),
       attempt, request.target().identity(), request.control().identity(),
-      pkgapply::test::checkpoint_fixture::application_identity<
-          pkgapply::lease_bound_state_projection_identity>(
-          state_projection_seed),
-      lease.identity(), transaction.backend());
+      state_projection, lease.identity(), transaction.backend());
   return transaction.publish_journal(pkgapply::application_journal_record::make(
       header, pkgapply::application_journal_state::preparing, {}, {}));
 }

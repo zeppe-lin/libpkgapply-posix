@@ -88,8 +88,19 @@ template<class Identity>
       application_request.target().identity(),
       backend,
       nonce(seed));
-  const auto state_projection =
-      application_identity<lease_bound_state_projection_identity>(seed + 1);
+  const auto lease =
+      application_identity<mutation_lease_instance_identity>(seed + 2);
+  std::vector<projected_path_owners> projected_paths;
+  projected_paths.reserve(
+      application_request.plan().preconditions().paths().size());
+  for (const auto& expected : application_request.plan().preconditions().paths()) {
+    projected_paths.emplace_back(expected.path(), expected.owners());
+  }
+  const auto state_projection = lease_bound_state_projection::make(
+      lease, application_request.plan().preconditions().installed_snapshot(),
+      application_request.plan().preconditions().ownership_inventory(),
+      state_projection_completeness::complete, std::move(projected_paths),
+      application_identity<state_projection_evidence_identity>(seed + 1));
   const auto header = application_journal_header::make(
       pkgplan::operation_kind::install,
       application_request.identity(),
@@ -98,7 +109,7 @@ template<class Identity>
       application_request.target().identity(),
       application_request.control().identity(),
       state_projection,
-      application_identity<mutation_lease_instance_identity>(seed + 2),
+      lease,
       backend);
   const std::vector<application_journal_effect> effects = {
       application_journal_effect::make(

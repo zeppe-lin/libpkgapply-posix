@@ -10,10 +10,12 @@ synchronizes the file, atomically renames it over the prior snapshot, and
 synchronizes the directory. Failure after rename is reported separately as a
 visible replacement whose directory durability is unconfirmed. Loads use
 `openat()` without following the final symlink, require a bounded regular file,
-decode the complete stream, and verify that filename and journal content name
-the same journal. After one journal snapshot is durable, publication atomically
-updates a separate request-identity index to that journal. The index is a direct
-restart locator: it never scans the journal namespace or chooses among attempts.
+decode the complete stream, including the exact admitted lease-bound state-
+projection body retained by the journal header, and verify that filename and
+journal content name the same journal. After one journal snapshot is durable,
+publication atomically updates a separate request-identity index to that
+journal. The index is a direct restart locator: it never scans the journal
+namespace or chooses among attempts.
 A missing index means no attempt is admitted for restart; an index naming a
 missing, corrupt, or foreign-request journal is contradictory storage authority.
 

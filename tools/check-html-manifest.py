@@ -89,7 +89,9 @@ def main() -> int:
         if not (root / required).is_file():
             fail(f"HTML documentation input is missing: {required}")
 
-    options = root / ("meson.options" if (root / "meson.options").exists() else "meson_options.txt")
+    options = root / "meson.options"
+    if not options.is_file():
+        fail("Meson options source is missing: meson.options")
     if not re.search(r"['\"]html_docs['\"]", options.read_text(encoding="utf-8")):
         fail("Meson html_docs feature is absent")
 

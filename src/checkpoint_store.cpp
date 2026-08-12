@@ -163,7 +163,7 @@ std::optional<application_restart_checkpoint_encoding> read_encoding(
 {
   unique_fd file(open_at(
       directory_fd, name.c_str(),
-      O_RDONLY | cloexec_flag() | nofollow_flag()));
+      O_RDONLY | cloexec_flag() | nofollow_flag() | O_NONBLOCK));
   if (file.get() < 0) {
     if (errno == ENOENT)
       return std::nullopt;

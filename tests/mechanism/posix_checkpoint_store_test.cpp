@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexandr Savca
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include "nonblocking_refusal.h"
+
 #include "checkpoint_test_fixture.h"
 
 #include <libpkgapply-posix/checkpoint_store.h>
@@ -131,6 +133,19 @@ int main()
         pkgapply::posix::checkpoint_store_error_code::snapshot_corrupt;
   }
   require(rejected, "checkpoint store accepted corrupt bytes");
+
+  const std::string fifo_snapshot = moved + "/" + name;
+  require(pkgapply::test::replace_with_fifo(fifo_snapshot),
+          "cannot replace checkpoint snapshot with fifo");
+  require(pkgapply::test::refuses_without_blocking([&]() {
+    try {
+      static_cast<void>(store.load(journal, request));
+    } catch (const pkgapply::posix::checkpoint_store_error& error) {
+      return error.code() ==
+          pkgapply::posix::checkpoint_store_error_code::snapshot_corrupt;
+    }
+    return false;
+  }), "checkpoint store blocked on special-file snapshot corruption");
 
   DIR* stream = ::opendir(moved.c_str());
   require(stream != nullptr, "cannot inspect checkpoint cleanup directory");

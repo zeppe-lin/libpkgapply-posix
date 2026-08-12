@@ -2,6 +2,10 @@
 
 ## 3.2.0
 
+- Refuse FIFO and other non-regular corruption in private/durable regular-file
+  authority slots without blocking before type validation.
+- Align maintained Markdown on ATX headings and qualify against the published
+  resolver 3.0 / apply 3.0 release closure.
 - Made rejected-object record identity a direct provider-owned reopening key.
 - Added self-contained identity reopening without reconstructing planner commands
   or requiring retained application-journal authority.

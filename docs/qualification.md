@@ -2,8 +2,7 @@
 
 The following qualification contract was extracted from the libpkgapply 2.3.0 test doctrine.
 
-POSIX outer-lease tests
------------------------
+## POSIX outer-lease tests
 
 The caller-owned mutation-lease mechanism must prove:
 
@@ -22,8 +21,7 @@ The caller-owned mutation-lease mechanism must prove:
   and
 * acquisition and validation perform no installed-state read or target mutation.
 
-POSIX backend tests
--------------------
+## POSIX backend tests
 
 The current journal and checkpoint stores run in unprivileged temporary
 directories. Journal-store tests prove:
@@ -34,7 +32,8 @@ directories. Journal-store tests prove:
 * exact encode, publish, load, and identity preservation;
 * atomic monotonic replacement and exact idempotent republication;
 * stale snapshot rejection;
-* corrupt byte-stream rejection; and
+* corrupt byte-stream rejection;
+* nonblocking refusal of FIFO/special-file snapshot corruption; and
 * absence of leftover temporary files after successful publication.
 
 Checkpoint codec and store tests prove:
@@ -43,6 +42,7 @@ Checkpoint codec and store tests prove:
 * byte-stable round trips including completed application evidence;
 * rejection of truncation, same-length checksum corruption, and foreign plans;
 * immutable link-without-replace publication and exact republication;
+* nonblocking refusal of FIFO/special-file snapshot corruption;
 * conflict rejection for different checkpoint bytes under one journal record;
 * mode-0600 regular files and descriptor anchoring across directory rename; and
 * corrupt stored-byte rejection before replay.
@@ -57,7 +57,8 @@ Private payload-stage tests prove:
 * another selection cannot reuse the same application attempt;
 * abandoned or incomplete stages are not restart authority;
 * sealed descriptors remain available after namespace pathname movement; and
-* stored-file corruption is rejected before a read descriptor is granted.
+* stored-file corruption is rejected before a read descriptor is granted; and
+* FIFO/special-file payload corruption is refused without blocking.
 
 Private old-object capture tests prove:
 
@@ -71,7 +72,8 @@ Private old-object capture tests prove:
 * symbolic links and FIFOs retain exact admitted object facts;
 * idempotent capture replay does not reread the changed target;
 * foreign attempts cannot alias existing capture material; and
-* storage and target descriptors remain authoritative after pathname movement.
+* storage and target descriptors remain authoritative after pathname movement; and
+* FIFO/special-file capture-record corruption is refused without blocking.
 
 Immutable rejected-store tests prove:
 
@@ -102,7 +104,8 @@ Immutable rejected-store tests prove:
 * restart loading rejects malformed bindings, malformed records, and corrupted
   payloads through typed store failures before granting a descriptor;
 * namespace descriptors and direct identity lookup remain authoritative after
-  pathname movement; and
+  pathname movement;
+* FIFO/special-file rejected-record corruption is refused without blocking; and
 * record visibility and namespace synchronization remain separate operations.
 
 Active-namespace qualification is split by mechanism boundary. Workspace tests
@@ -175,7 +178,8 @@ Completed-evidence store tests must prove:
   identity-inconsistent records are rejected before publication is claimed;
 * record visibility and completed-evidence synchronization remain separate;
 * descriptor anchoring survives store pathname movement;
-* restart verifies an already-published record before skipping publication; and
+* restart verifies an already-published record before skipping publication;
+* FIFO/special-file completed-evidence corruption is refused without blocking; and
 * checkpoint, journal, rejected-store, active-namespace, and installed-state
   durability are not implied by completed-evidence synchronization.
 

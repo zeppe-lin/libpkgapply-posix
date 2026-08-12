@@ -198,7 +198,7 @@ std::optional<application_journal_encoding> read_encoding(
     int directory_fd,
     const std::string& name)
 {
-  const int flags = O_RDONLY | cloexec_flag() | nofollow_flag();
+  const int flags = O_RDONLY | cloexec_flag() | nofollow_flag() | O_NONBLOCK;
   unique_fd file(open_at(directory_fd, name.c_str(), flags));
   if (file.get() < 0) {
     if (errno == ENOENT)

@@ -232,7 +232,7 @@ read_file(int directory_fd,
 {
   unique_fd file(open_at(
       directory_fd, name.c_str(),
-      O_RDONLY | cloexec_flag() | nofollow_flag()));
+      O_RDONLY | cloexec_flag() | nofollow_flag() | O_NONBLOCK));
   if (file.get() < 0)
     throw_error(open_code, errno, "cannot open private payload record");
   set_close_on_exec(file.get(), open_code);
@@ -751,7 +751,7 @@ sealed_application_payloads::open(pkgimage::entry_id entry) const
 
   unique_fd file(open_at(
       state_->directory_fd, entry_name(entry).c_str(),
-      O_RDONLY | cloexec_flag() | nofollow_flag()));
+      O_RDONLY | cloexec_flag() | nofollow_flag() | O_NONBLOCK));
   if (file.get() < 0)
     throw_error(payload_stage_error_code::entry_open_failed, errno,
                 "cannot open sealed regular payload");
@@ -865,7 +865,7 @@ application_payload_stage::begin(const pkgimage::package_entry& entry)
   if (state_->verification) {
     state_->active_file.reset(open_at(
         state_->directory_fd, entry_name(entry.id).c_str(),
-        O_RDONLY | cloexec_flag() | nofollow_flag()));
+        O_RDONLY | cloexec_flag() | nofollow_flag() | O_NONBLOCK));
     if (state_->active_file.get() < 0)
       throw_error(payload_stage_error_code::entry_open_failed, errno,
                   "cannot open sealed payload for replay verification");

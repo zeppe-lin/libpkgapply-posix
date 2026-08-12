@@ -92,7 +92,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgresolve
-          ref: v2.0.0
+          ref: v3.0.0
           path: dependencies/libpkgresolve
       - uses: actions/checkout@v4
         with:
@@ -208,7 +208,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgresolve
-          ref: v2.0.0
+          ref: v3.0.0
           path: dependencies/libpkgresolve
       - uses: actions/checkout@v4
         with:

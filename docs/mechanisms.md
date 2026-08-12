@@ -27,6 +27,13 @@ is accepted only when the existing bytes are identical; conflicting bytes under
 the same journal-record identity are rejected. Loads verify the stored checksum,
 exact journal binding, and typed request binding before returning replay facts.
 
+Every private or durable slot that is semantically required to be a regular
+file is opened nonblocking before `fstat()` validates its type. This applies to
+journal and checkpoint snapshots, completed-evidence records, payload-stage
+records and payloads, capture records and payloads, and rejected-object records
+and payloads. A FIFO or other special-file replacement is corruption authority,
+not a reason for restart or evidence reopening to wait for an unrelated process.
+
 The POSIX private payload namespace is also descriptor-anchored. A stage
 directory is named by the full application-attempt identity rather than by a
 package path, archive pathname, or nonce alone. Its immutable binding record
@@ -138,8 +145,7 @@ durability. The backend must synchronize the attempt namespace separately and
 report only the guarantee actually established. This mechanism neither mutates
 the active namespace nor classifies the complete application outcome.
 
-POSIX active namespace publication
-----------------------------------
+## POSIX active namespace publication
 
 The active namespace is not another application controller. The complete POSIX
 transaction binds the managed target root, application attempt, optional exact
@@ -246,8 +252,7 @@ the validated journal and checkpoint before calling it. The mechanism alone
 does not discover attempts, select journals, or classify terminal application
 success.
 
-POSIX completed-evidence storage
---------------------------------
+## POSIX completed-evidence storage
 
 Completed application evidence is a terminal application record, not a restart
 checkpoint and not installed-state truth. The semantic engine constructs it only
@@ -300,8 +305,7 @@ distinguishes no record, exact visible record, and contradictory storage state.
 Terminal cleanup must not remove completed evidence while a receipt or durable
 journal still references it.
 
-POSIX backend transaction composition
--------------------------------------
+## POSIX backend transaction composition
 
 The concrete POSIX backend is a mechanism composition root, not another
 semantic engine. Its installed factory exposes the `application_backend`

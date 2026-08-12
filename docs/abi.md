@@ -12,15 +12,14 @@ provider retain their virtual protocol shape. Shared-boundary qualification
 therefore requires provider SONAME 2 together with semantic-core NEEDED entry
 `libpkgapply.so.3`.
 
-The current 3.0 semantic-core release candidate also changes the by-value
-`application_journal_record` layout so its header can retain the complete
-admitted lease-bound state projection. POSIX journal-store entry points consume
-and return that core value, so a provider built against an earlier 3.0 candidate
-must not be reused with the later core even though both name SONAME 3. The 3.0
-core is still unreleased; qualification therefore rebuilds the provider against
-the exact core candidate instead of preserving an obsolete development layout
-or adding a compatibility shim. This development-closure rebuild does not by
-itself advance the provider SONAME.
+The published 3.0 semantic core changes the by-value
+`application_journal_record` layout so its header retains the complete admitted
+lease-bound state projection. POSIX journal-store entry points consume and
+return that core value, so providers built against obsolete pre-release 3.0
+development layouts are not compatible merely because they named the same core
+SONAME. Release qualification rebuilds against published `libpkgapply` 3.0.0;
+there is no compatibility shim for abandoned development layouts. That closure
+rebuild does not by itself advance the provider SONAME.
 
 Public classes carry `PKGAPPLY_POSIX_API`. Compilation is hidden by default and
 an exact reviewed ELF manifest is converted into the linker version script.

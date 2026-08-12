@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexandr Savca
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include "nonblocking_refusal.h"
+
 #include <libpkgapply-posix/payload_stage.h>
 #include <libpkgimage/package_archive.h>
 
@@ -306,6 +308,24 @@ int main()
   }
   require(corruption_rejected,
           "sealed payload corruption survived descriptor validation");
+
+  const std::string fifo_payload =
+      stage_path(namespace_directory.path(), admitted_attempt) + "/entry-" +
+      std::to_string(static_cast<std::uint64_t>(first_id)) + ".payload";
+  require(pkgapply::test::replace_with_fifo(fifo_payload),
+          "cannot replace sealed payload with fifo");
+  require(pkgapply::test::refuses_without_blocking([&]() {
+    try {
+      auto corrupted = store.load(admitted_attempt, archive.image(), selection);
+      if (!corrupted)
+        return false;
+      static_cast<void>(corrupted->open(first_id));
+    } catch (const pkgapply::posix::payload_stage_error& error) {
+      return error.code() ==
+          pkgapply::posix::payload_stage_error_code::entry_size_mismatch;
+    }
+    return false;
+  }), "payload stage blocked on special-file payload corruption");
 
   return 0;
 }

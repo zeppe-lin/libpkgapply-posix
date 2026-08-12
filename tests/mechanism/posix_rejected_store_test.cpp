@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexandr Savca
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include "nonblocking_refusal.h"
+
 #include <libpkgapply-posix/capture_store.h>
 #include <libpkgapply-posix/payload_stage.h>
 #include <libpkgapply-posix/rejected_store.h>
@@ -815,6 +817,19 @@ int main()
   require(direct_corruption_rejected,
           "direct rejected identity reopening accepted corrupt payload bytes");
 
+  require(pkgapply::test::replace_with_fifo(corrupt_payload),
+          "cannot replace rejected payload with fifo");
+  require(pkgapply::test::refuses_without_blocking([&]() {
+    try {
+      static_cast<void>(rejected_store.load(
+          admitted_attempt, admitted_plan, regular_request));
+    } catch (const pkgapply::posix::rejected_store_error& error) {
+      return error.code() ==
+          pkgapply::posix::rejected_store_error_code::payload_mismatch;
+    }
+    return false;
+  }), "rejected store blocked on special-file payload corruption");
+
   const std::string old_attempt_hex = old_attempt.identity().string().substr(
       std::string("v1:sha256:").size());
   const auto old_path_digest = sha256(old_request.path().string());
@@ -833,6 +848,19 @@ int main()
   }
   require(record_corruption_rejected,
           "malformed rejected record escaped typed restart validation");
+
+  require(pkgapply::test::replace_with_fifo(corrupt_record),
+          "cannot replace rejected record with fifo");
+  require(pkgapply::test::refuses_without_blocking([&]() {
+    try {
+      static_cast<void>(rejected_store.load(
+          old_attempt, old_operation.identity(), old_request));
+    } catch (const pkgapply::posix::rejected_store_error& error) {
+      return error.code() ==
+          pkgapply::posix::rejected_store_error_code::record_read_failed;
+    }
+    return false;
+  }), "rejected store blocked on special-file record corruption");
 
   require(!rejected_store.load(
                attempt(120), admitted_plan, regular_request).has_value(),

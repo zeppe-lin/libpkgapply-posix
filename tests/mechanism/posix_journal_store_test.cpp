@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexandr Savca
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include "nonblocking_refusal.h"
+
 #include <libpkgapply-posix/journal_store.h>
 
 #include <array>
@@ -308,6 +310,19 @@ int main()
                pkgapply::posix::journal_store_error_code::snapshot_corrupt;
   }
   require(rejected, "journal store accepted corrupt snapshot bytes");
+
+  const std::string fifo_snapshot = moved + "/" + name;
+  require(pkgapply::test::replace_with_fifo(fifo_snapshot),
+          "cannot replace journal snapshot with fifo");
+  require(pkgapply::test::refuses_without_blocking([&]() {
+    try {
+      static_cast<void>(store.load(successor.header().identity()));
+    } catch (const pkgapply::posix::journal_store_error& error) {
+      return error.code() ==
+          pkgapply::posix::journal_store_error_code::snapshot_corrupt;
+    }
+    return false;
+  }), "journal store blocked on special-file snapshot corruption");
 
   for (const auto& file : stored_files(moved)) {
     require(::unlink((moved + "/" + file).c_str()) == 0,

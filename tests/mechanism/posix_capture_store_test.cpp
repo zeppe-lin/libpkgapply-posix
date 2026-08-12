@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexandr Savca
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include "nonblocking_refusal.h"
+
 #include <libpkgapply-posix/capture_store.h>
 #include <libpkgapply-posix/target_observer.h>
 
@@ -288,6 +290,20 @@ int main()
   }
   require(corrupt_record_rejected,
           "malformed capture record escaped the provider error domain");
+
+  const auto fifo_record = capture_record(corrupt_storage.path());
+  require(pkgapply::test::replace_with_fifo(fifo_record.string()),
+          "cannot replace capture record with fifo");
+  require(pkgapply::test::refuses_without_blocking([&]() {
+    try {
+      static_cast<void>(corrupt_store.load(
+          admitted_attempt, later_request, find(batch, "usr/bin/later")));
+    } catch (const pkgapply::posix::capture_store_error& error) {
+      return error.code() ==
+          pkgapply::posix::capture_store_error_code::record_read_failed;
+    }
+    return false;
+  }), "capture store blocked on special-file record corruption");
 
   require(::unlink((bin + "/tool").c_str()) == 0,
           "cannot remove captured target object");

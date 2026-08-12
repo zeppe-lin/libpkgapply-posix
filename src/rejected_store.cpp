@@ -213,7 +213,8 @@ read_file(int directory_fd,
           bool absent_is_empty = false)
 {
   unique_fd file(open_at(
-      directory_fd, name.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW));
+      directory_fd, name.c_str(),
+      O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK));
   if (file.get() < 0) {
     if (absent_is_empty && errno == ENOENT)
       return {};
@@ -1555,7 +1556,8 @@ same_regular_payload(int directory_fd,
                      const pkgplan::package_path& path)
 {
   unique_fd file(open_at(
-      directory_fd, name.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW));
+      directory_fd, name.c_str(),
+      O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK));
   if (file.get() < 0)
     throw_error(rejected_store_error_code::payload_open_failed, errno,
                 path.string(), "cannot open existing rejected payload");
@@ -1672,7 +1674,8 @@ open_verified_payload_named(int directory_fd,
                 "rejected payload does not match its record");
   }
   unique_fd file(open_at(
-      directory_fd, name.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW));
+      directory_fd, name.c_str(),
+      O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK));
   if (file.get() < 0)
     throw_error(rejected_store_error_code::payload_open_failed, errno,
                 observation.path().string(),

@@ -8,6 +8,9 @@ leases, private payload staging, old-object capture, rejected-object storage and
 durable journals and restart checkpoints, completed-evidence publication,
 active namespace mutation and recovery, and the composed
 `application_posix_backend`.
+Regular-file authority is opened nonblocking before type validation, so FIFO or
+other special-file corruption fails closed instead of wedging restart or evidence
+reopening.
 
 The library does not construct package plans, decide semantic application
 policy, publish installed state, execute lifecycle programs, discover storage

@@ -190,8 +190,10 @@ if get_option('tests').allowed()
     'architecture_contract',
     'abi_contract',
     'ci_contract',
+    'documentation_source_contract',
     'extraction_contract',
     'release_contract',
+    'regular_record_refusal_contract',
     'repository_contract',
     'test_topology_contract',
   ]

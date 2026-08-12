@@ -30,7 +30,7 @@ for script in "$root"/ci/*.sh "$root"/tests/contracts/*.sh; do
   sh -n "$script" || fail "invalid shell: ${script#"$root"/}"
 done
 for token in \
-  v3.0.0 v3.0.1 v3.1.0 v2.0.0 v1.0.0 v1.1.0 v0.4.0 v0.3.1 \
+  v3.0.0 v3.0.1 v3.1.0 v1.0.0 v1.1.0 v0.4.0 v0.3.1 \
   'GCC shared' 'GCC static' 'Clang shared' 'Clang static' \
   'GCC release' 'address,undefined' 'meson==1.10.2'
 do
@@ -43,6 +43,7 @@ for dependency in \
   'libpkgsource v3.0.1' \
   'libpkgstate v3.1.0' \
   'libpkgcatalog v3.0.1' \
+  'libpkgresolve v3.0.0' \
   'libpkgsource-plan v1.1.0' \
   'libpkgapply v3.0.0'
 do
@@ -89,3 +90,7 @@ grep -F 'html_docs: enabled' "$root/.github/workflows/ci.yml" >/dev/null || fail
 grep -F 'pandoc' "$root/.github/workflows/ci.yml" >/dev/null || fail 'Pandoc qualification dependency is absent'
 grep -F -- '-Dhtml_docs=' "$root/.github/workflows/ci.yml" >/dev/null || fail 'HTML Meson feature is not configured'
 grep -F 'qualify-html-docs.sh' "$root/.github/workflows/ci.yml" >/dev/null || fail 'installed HTML qualification is absent'
+
+if grep -F 'ref: v2.0.0' "$root/.github/workflows/ci.yml" >/dev/null; then
+  fail 'CI retains retired resolver v2.0.0 authority'
+fi

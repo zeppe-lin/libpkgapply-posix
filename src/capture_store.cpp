@@ -208,7 +208,8 @@ read_file(int directory_fd,
           bool absent_is_empty = false)
 {
   unique_fd file(open_at(
-      directory_fd, name.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW));
+      directory_fd, name.c_str(),
+      O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK));
   if (file.get() < 0) {
     if (absent_is_empty && errno == ENOENT)
       return {};
@@ -1308,7 +1309,8 @@ open_verified_payload_object(int attempt_fd,
 
   const std::string name = payload_name(path);
   unique_fd file(open_at(
-      attempt_fd, name.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW));
+      attempt_fd, name.c_str(),
+      O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK));
   if (file.get() < 0)
     throw_error(capture_store_error_code::payload_open_failed, errno,
                 path.string(), "cannot open captured regular payload");

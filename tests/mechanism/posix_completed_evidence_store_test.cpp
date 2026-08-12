@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexandr Savca
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#include "nonblocking_refusal.h"
+
 #include "checkpoint_test_fixture.h"
 
 #include <libpkgapply-posix/completed_evidence_store.h>
@@ -265,5 +267,18 @@ int main()
         pkgapply::posix::completed_evidence_store_error_code::record_invalid;
   }
   require(rejected, "completed-evidence store accepted corrupt bytes");
+
+  const std::string fifo_record = moved + "/" + name;
+  require(pkgapply::test::replace_with_fifo(fifo_record),
+          "cannot replace completed-evidence record with fifo");
+  require(pkgapply::test::refuses_without_blocking([&]() {
+    try {
+      static_cast<void>(duplicate.load(evidence.identity(), request));
+    } catch (const pkgapply::posix::completed_evidence_store_error& error) {
+      return error.code() ==
+          pkgapply::posix::completed_evidence_store_error_code::record_invalid;
+    }
+    return false;
+  }), "completed-evidence store blocked on special-file record corruption");
   return 0;
 }

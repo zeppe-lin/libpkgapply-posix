@@ -1,4 +1,4 @@
-# Testing contract
+# Testing libpkgapply-posix
 
 Qualification is organized by evidence ownership rather than by implementation
 filename:
@@ -14,10 +14,10 @@ tests/
 ```
 
 Meson suites are `unit`, `mechanism`, `integration`, `header`, and `contract`.
-The always-registered surface contains one unit executable, twelve direct
-mechanism executables, three composed integration executables, twelve
-standalone public-header compilations, and twelve contracts. Shared builds add
-the reviewed ELF ABI-surface contract.
+The always-registered surface contains one unit executable, direct mechanism
+executables, composed integration executables, and standalone public-header
+compilations. Source, manual, repository, and ABI contracts are registered by
+role; shared builds additionally qualify the reviewed ELF ABI surface.
 
 The evidence roles are distinct:
 

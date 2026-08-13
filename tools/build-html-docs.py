@@ -88,7 +88,7 @@ def relative_link(page: Path, target: str) -> str:
 def navigation(project: str, page: Path, version: str, outputs: set[str]) -> str:
     preferred = [
         ("Home", "index.html"),
-        ("Architecture", "architecture.html"),
+        ("Design", "design.html"),
         ("Mechanisms", "mechanisms.html"),
         ("Storage", "storage.html"),
         ("Integration", "integration.html"),

@@ -7,7 +7,7 @@ set -eu
   echo "usage: $0 BUILD-DIR" >&2
   exit 2
 }
-page=$1/product/man/libpkgapply-posix.3
+page=$1/product/docs/man/libpkgapply-posix.3
 [ -s "$page" ] || {
   echo "generated manual is absent: $page" >&2
   exit 1

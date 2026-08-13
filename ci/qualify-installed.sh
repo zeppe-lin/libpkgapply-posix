@@ -114,7 +114,7 @@ fi
 
 python3 ci/qualify-installed-documentation.py "$prefix" libpkgapply-posix
 
-page=$build/product/man/libpkgapply-posix.3
+page=$build/product/docs/man/libpkgapply-posix.3
 if [ -e "$page" ]; then
   installed=$prefix/share/man/man3/libpkgapply-posix.3
   [ -s "$installed" ] || {

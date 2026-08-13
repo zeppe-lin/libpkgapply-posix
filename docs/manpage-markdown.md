@@ -1,15 +1,24 @@
 # Manual-page Markdown
 
-The files in `docs/man/` are deterministic Markdown mirrors of the canonical
-scdoc sources in `man/`. They exist for static HTML generation and source-tree
-reading. They are not an independent editing surface.
+The files in `docs/man/` are the canonical authored manual-page sources.
+They are also rendered directly into the versioned HTML documentation.
 
-After changing a manual, regenerate its mirror with:
+Pandoc 3.1 through 3.x derives deterministic roff into
+`docs/man/generated/`. The generated roff is committed so ordinary builds and
+installs do not require Pandoc.
+
+Regenerate after changing a manual source:
 
 ```sh
-python3 tools/render-man-markdown.py \
-  man/NAME.scdoc docs/man/NAME.md \
-  --project libpkgapply-posix --version 3.2.0
+ninja -C build update-man-pages
 ```
 
-`tools/check-man-markdown.py` rejects missing, extra, or stale mirrors.
+Qualification regenerates and byte-compares the committed derivative:
+
+```sh
+ninja -C build check-man-pages
+```
+
+`tools/canonicalize-man-roff.awk` normalizes presentation differences between
+supported Pandoc 3.x writers. The Markdown remains the sole authored manual
+authority; generated roff must never be edited directly.

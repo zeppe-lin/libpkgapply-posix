@@ -67,7 +67,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgimage
-          ref: v0.4.0
+          ref: v0.4.1
           path: dependencies/libpkgimage
       - uses: actions/checkout@v4
         with:
@@ -124,7 +124,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends \
             binutils clang doxygen libarchive-dev libssl-dev mandoc pandoc \
-            ninja-build pkg-config python3-venv scdoc
+            ninja-build pkg-config python3-venv
           python3 -m venv "$RUNNER_TEMP/meson"
           "$RUNNER_TEMP/meson/bin/pip" install 'meson==1.10.2'
           echo "$RUNNER_TEMP/meson/bin" >> "$GITHUB_PATH"
@@ -183,7 +183,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgimage
-          ref: v0.4.0
+          ref: v0.4.1
           path: dependencies/libpkgimage
       - uses: actions/checkout@v4
         with:

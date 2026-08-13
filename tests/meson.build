@@ -192,6 +192,8 @@ if get_option('tests').allowed()
     'ci_contract',
     'documentation_source_contract',
     'extraction_contract',
+    'manpage_normalizer',
+    'manpage_source',
     'release_contract',
     'regular_record_refusal_contract',
     'repository_contract',
@@ -207,6 +209,20 @@ if get_option('tests').allowed()
       suite: 'contract',
     )
   endforeach
+
+  pandoc_for_tests = find_program('pandoc', required: false)
+  if pandoc_for_tests.found()
+    test(
+      'generated-manpages',
+      sh,
+      args: [
+        meson.current_source_dir() / 'contracts/check_manpage_generated.sh',
+        meson.project_source_root(),
+        pandoc_for_tests.full_path(),
+      ],
+      suite: 'contract',
+    )
+  endif
 
   # The Doxygen parser compiles installed public headers in isolation. Pass the
   # complete transitive public include closure explicitly so qualification

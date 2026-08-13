@@ -46,15 +46,15 @@ for package in $packages; do
 done
 
 for f in README.md CONTRIBUTING.md MAINTAINING.md HISTORY.md \
-  docs/architecture.md docs/integration.md docs/testing.md docs/abi.md \
+  DESIGN.md TESTING.md docs/integration.md docs/abi.md \
   docs/code-style.md docs/history/libpkgapply-2.3-extraction.md \
-  man/libpkgapply-posix.3.scdoc
+  docs/man/libpkgapply-posix.3.md
 do
   [ -s "$root/$f" ] || fail "missing $f"
 done
 grep -F 'does not construct package plans' "$root/README.md" >/dev/null ||
   fail 'non-ownership not explicit'
-grep -F 'descriptor-anchored' "$root/docs/architecture.md" >/dev/null ||
+grep -F 'descriptor-anchored' "$root/DESIGN.md" >/dev/null ||
   fail 'authority retention not documented'
 python3 "$root/tools/check-public-documentation.py" \
   "$root" libpkgapply-posix libpkgapply-posix.h
@@ -66,7 +66,7 @@ if command -v clang++ >/dev/null 2>&1; then
     --namespace pkgapply --clang "$(command -v clang++)"
 fi
 
-python3 "$root/tools/check-man-markdown.py" \
-  --root "$root" --project libpkgapply-posix --version 3.2.0
+"$root/tests/contracts/check_manpage_source.sh" "$root"
+"$root/tests/contracts/check_manpage_normalizer.sh" "$root"
 python3 "$root/tools/check-html-manifest.py" \
   --root "$root" --project libpkgapply-posix

@@ -27,9 +27,9 @@
       "title": "ELF ABI policy"
     },
     {
-      "source": "docs/architecture.md",
-      "output": "architecture.html",
-      "title": "Architecture"
+      "source": "DESIGN.md",
+      "output": "design.html",
+      "title": "libpkgapply-posix design"
     },
     {
       "source": "docs/code-style.md",
@@ -72,9 +72,9 @@
       "title": "POSIX mechanism qualification"
     },
     {
-      "source": "docs/testing.md",
+      "source": "TESTING.md",
       "output": "testing.html",
-      "title": "Testing contract"
+      "title": "Testing libpkgapply-posix"
     }
   ]
 }

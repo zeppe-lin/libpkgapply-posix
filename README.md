@@ -43,8 +43,8 @@ meson compile -C build
 meson test -C build --print-errorlogs
 ```
 
-Build shared and static closures separately. See `docs/architecture.md`,
-`docs/integration.md`, `docs/testing.md`, and `docs/abi.md` before changing a
+Build shared and static closures separately. See `DESIGN.md`,
+`docs/integration.md`, `TESTING.md`, and `docs/abi.md` before changing a
 boundary.
 
 ## License

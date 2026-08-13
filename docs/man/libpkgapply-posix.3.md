@@ -1,7 +1,5 @@
 % LIBPKGAPPLY-POSIX(3) libpkgapply-posix | Version 3.2.0
 
-<!-- Generated from libpkgapply-posix.3.scdoc; do not edit. -->
-
 
 # NAME
 

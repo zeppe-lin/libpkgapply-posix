@@ -97,4 +97,21 @@ grep -F 'capture_store_error_code::record_invalid' \
   "$root/tests/mechanism/posix_capture_store_test.cpp" >/dev/null ||
   fail 'capture-store corruption regression does not require typed failure'
 
+
+# Every executable source-tree shell contract must be registered by Meson. The
+# generated-manpage freshness check is registered conditionally when Pandoc is
+# present; ABI surface is separately registered only for shared builds.
+for contract in "$root"/tests/contracts/check_*.sh; do
+  name=$(basename "$contract")
+  case $name in
+    check_abi_surface.sh|check_documentation_contract.sh|check_manpage_generated.sh|check_pkgconfig_metadata.sh|check_mutation_lease_source.sh|check_style_contract.sh)
+      continue
+      ;;
+  esac
+  stem=${name#check_}
+  stem=${stem%.sh}
+  grep -F "'${stem}'," "$meson_file" >/dev/null ||
+    fail "unregistered shell contract: $name"
+done
+
 echo 'test-topology-contract: ok'

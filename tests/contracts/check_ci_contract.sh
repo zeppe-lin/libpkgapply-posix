@@ -30,7 +30,7 @@ for script in "$root"/ci/*.sh "$root"/tests/contracts/*.sh; do
   sh -n "$script" || fail "invalid shell: ${script#"$root"/}"
 done
 for token in \
-  v3.0.0 v3.0.1 v3.1.0 v1.0.0 v1.1.0 v0.4.0 v0.3.1 \
+  v3.0.0 v3.0.1 v3.1.0 v1.0.0 v1.1.0 v0.4.1 v0.3.1 \
   'GCC shared' 'GCC static' 'Clang shared' 'Clang static' \
   'GCC release' 'address,undefined' 'meson==1.10.2'
 do
@@ -39,6 +39,7 @@ do
 done
 
 for dependency in \
+  'libpkgimage v0.4.1' \
   'libpkgplan v0.3.1' \
   'libpkgsource v3.0.1' \
   'libpkgstate v3.1.0' \
@@ -69,6 +70,7 @@ do
     fail "CI does not qualify $repository at $reference in both matrices"
 done
 
+
 grep -F 'libpkgapply.so.3' "$root/ci/audit-shared-boundary.sh" >/dev/null ||
   fail 'shared audit omits the semantic core SONAME'
 grep -F 'libpkgplan.so.1' "$root/ci/audit-shared-boundary.sh" >/dev/null ||
@@ -93,4 +95,12 @@ grep -F 'qualify-html-docs.sh' "$root/.github/workflows/ci.yml" >/dev/null || fa
 
 if grep -F 'ref: v2.0.0' "$root/.github/workflows/ci.yml" >/dev/null; then
   fail 'CI retains retired resolver v2.0.0 authority'
+fi
+
+if grep -F 'scdoc' "$root/.github/workflows/ci.yml" >/dev/null; then
+  fail 'CI retains retired scdoc dependency'
+fi
+
+if grep -F 'ref: v0.4.0' "$root/.github/workflows/ci.yml" >/dev/null; then
+  fail 'CI retains retired libpkgimage v0.4.0 authority'
 fi

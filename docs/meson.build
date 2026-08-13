@@ -5,9 +5,11 @@ documentation_dir = get_option('datadir') / 'doc' / meson.project_name()
 
 install_data(
   '../CONTRIBUTING.md',
+  '../DESIGN.md',
   '../HISTORY.md',
   '../MAINTAINING.md',
   '../README.md',
+  '../TESTING.md',
   '../COPYING',
   '../COPYRIGHT',
   install_dir: documentation_dir,
@@ -16,14 +18,12 @@ install_data(
 
 install_data(
   'abi.md',
-  'architecture.md',
   'code-style.md',
   'html.md',
   'integration.md',
   'manpage-markdown.md',
   'mechanisms.md',
   'qualification.md',
-  'testing.md',
   install_dir: documentation_dir,
   install_tag: 'doc',
 )
@@ -40,6 +40,8 @@ install_data(
   install_dir: documentation_dir / 'man',
   install_tag: 'doc',
 )
+
+subdir('man')
 
 install_data(
   'assets/house.css',
@@ -67,18 +69,18 @@ if html_docs_enabled
   )
   html_docs_sources = files(
     '../CONTRIBUTING.md',
+    '../DESIGN.md',
     '../HISTORY.md',
     '../MAINTAINING.md',
     '../README.md',
+    '../TESTING.md',
     'abi.md',
-    'architecture.md',
     'code-style.md',
     'html.md',
     'integration.md',
     'manpage-markdown.md',
     'mechanisms.md',
     'qualification.md',
-    'testing.md',
     'history/libpkgapply-2.3-extraction.md',
     'history/libpkgapply-2.3-extraction.sha256',
     'man/libpkgapply-posix.3.md',
@@ -91,8 +93,8 @@ if html_docs_enabled
     '../tools/build-html-docs.py',
     '../tools/check-html-docs.py',
     '../tools/install-html-docs.py',
-    '../tools/render-man-markdown.py',
-    '../tools/check-man-markdown.py',
+    '../tools/update-man-pages.sh',
+    '../tools/canonicalize-man-roff.awk',
     '../include/libpkgapply-posix/backend.h',
     '../include/libpkgapply-posix/capture_store.h',
     '../include/libpkgapply-posix/checkpoint_store.h',

@@ -39,7 +39,7 @@ def local_target(page: Path, link: str) -> Path | None:
         return None
     if path.startswith("/"):
         fail(f"absolute local link in {page}: {link}")
-    if path.endswith(".md") or path.endswith(".scdoc"):
+    if path.endswith(".md"):
         fail(f"source documentation link escaped into {page}: {link}")
     return (page.parent / path).resolve()
 

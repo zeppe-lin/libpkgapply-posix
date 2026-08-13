@@ -1,4 +1,4 @@
-# Architecture
+# libpkgapply-posix design
 
 ## Role
 

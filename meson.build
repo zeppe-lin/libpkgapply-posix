@@ -54,5 +54,4 @@ pkgconf = import('pkgconfig')
 
 subdir('src')
 subdir('docs')
-subdir('man')
 subdir('tests')

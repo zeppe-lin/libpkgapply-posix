@@ -31,7 +31,7 @@ if get_option('tests').allowed()
     static: want_static,
   )
   libpkgsource_test_dep = dependency(
-    'libpkgsource', version: ['>=3.0.0', '<4.0.0'], required: true,
+    'libpkgsource', version: ['>=4.0.0', '<5.0.0'], required: true,
     static: want_static,
   )
   libpkgstate_test_dep = dependency(

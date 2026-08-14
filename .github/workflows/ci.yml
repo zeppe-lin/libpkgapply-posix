@@ -77,7 +77,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgsource
-          ref: v3.0.1
+          ref: v4.1.0
           path: dependencies/libpkgsource
       - uses: actions/checkout@v4
         with:
@@ -87,37 +87,37 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgcatalog
-          ref: v3.0.1
+          ref: v4.0.0
           path: dependencies/libpkgcatalog
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgresolve
-          ref: v3.0.0
+          ref: v4.0.0
           path: dependencies/libpkgresolve
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgsource-plan
-          ref: v1.1.0
+          ref: v2.0.0
           path: dependencies/libpkgsource-plan
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgbuild
-          ref: v3.0.0
+          ref: v3.0.1
           path: dependencies/libpkgbuild
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgbuild-image
-          ref: v1.0.0
+          ref: v1.0.1
           path: dependencies/libpkgbuild-image
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgbuild-plan
-          ref: v1.0.0
+          ref: v1.1.0
           path: dependencies/libpkgbuild-plan
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgapply
-          ref: v3.0.0
+          ref: v3.0.1
           path: dependencies/libpkgapply
       - name: Install build dependencies
         run: |
@@ -156,7 +156,7 @@ jobs:
         run: ./ci/qualify-installed.sh build "${{ matrix.mode }}"
       - name: Qualify installed HTML documentation
         if: matrix.html_docs == 'enabled'
-        run: ./ci/qualify-html-docs.sh build libpkgapply-posix 3.2.0
+        run: ./ci/qualify-html-docs.sh build libpkgapply-posix 3.2.1
 
   sanitizers:
     name: ${{ matrix.name }} address,undefined
@@ -193,7 +193,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgsource
-          ref: v3.0.1
+          ref: v4.1.0
           path: dependencies/libpkgsource
       - uses: actions/checkout@v4
         with:
@@ -203,37 +203,37 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgcatalog
-          ref: v3.0.1
+          ref: v4.0.0
           path: dependencies/libpkgcatalog
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgresolve
-          ref: v3.0.0
+          ref: v4.0.0
           path: dependencies/libpkgresolve
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgsource-plan
-          ref: v1.1.0
+          ref: v2.0.0
           path: dependencies/libpkgsource-plan
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgbuild
-          ref: v3.0.0
+          ref: v3.0.1
           path: dependencies/libpkgbuild
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgbuild-image
-          ref: v1.0.0
+          ref: v1.0.1
           path: dependencies/libpkgbuild-image
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgbuild-plan
-          ref: v1.0.0
+          ref: v1.1.0
           path: dependencies/libpkgbuild-plan
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgapply
-          ref: v3.0.0
+          ref: v3.0.1
           path: dependencies/libpkgapply
       - name: Install build dependencies
         run: |

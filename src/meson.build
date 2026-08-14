@@ -88,7 +88,8 @@ pkgconf.generate(
   description: 'POSIX mechanisms for libpkgapply',
   subdirs: '.',
   requires: [
-    'libpkgapply >= 3.0.0',
+    'libpkgapply >= 3.0.1',
+    'libpkgapply < 4.0.0',
     'libpkgimage >= 0.4.0',
   ],
   requires_private: [

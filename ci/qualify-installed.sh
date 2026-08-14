@@ -25,15 +25,20 @@ export PKG_CONFIG_PATH="$prefix/lib/pkgconfig:$deps/lib/pkgconfig${PKG_CONFIG_PA
 export LD_LIBRARY_PATH="$prefix/lib:$deps/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 unset PKG_CONFIG_SYSROOT_DIR
 
-[ "$(pkg-config --modversion libpkgapply-posix)" = 3.2.0 ] || {
-  echo 'installed libpkgapply-posix version is not 3.2.0' >&2
+[ "$(pkg-config --modversion libpkgapply-posix)" = 3.2.1 ] || {
+  echo 'installed libpkgapply-posix version is not 3.2.1' >&2
   exit 1
 }
 
 public=$(pkg-config --print-requires libpkgapply-posix)
 printf '%s\n' "$public" | grep -F \
-  'libpkgapply >= 3.0.0' >/dev/null || {
+  'libpkgapply >= 3.0.1' >/dev/null || {
   echo 'missing public libpkgapply requirement' >&2
+  exit 1
+}
+printf '%s\n' "$public" | grep -F \
+  'libpkgapply < 4.0.0' >/dev/null || {
+  echo 'missing public libpkgapply upper bound' >&2
   exit 1
 }
 printf '%s\n' "$public" | grep -F \

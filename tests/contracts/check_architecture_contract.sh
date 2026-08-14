@@ -15,8 +15,8 @@ fi
 
 grep -F "subdir('src')" "$root/meson.build" >/dev/null || \
   fail 'library body not explicit'
-grep -F "version: '>=3.0.0'" "$root/meson.build" >/dev/null || \
-  fail 'core 3.0 floor absent'
+grep -F "version: ['>=3.0.1', '<4.0.0']" "$root/meson.build" >/dev/null || \
+  fail 'apply ABI-3 source-4 closure is absent'
 grep -F "version: '>=0.4.0'" "$root/meson.build" >/dev/null || \
   fail 'image 0.4 floor absent'
 grep -F "version: '>=0.3.0'" "$root/meson.build" >/dev/null || \

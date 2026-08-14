@@ -1,5 +1,15 @@
 # History
 
+## 3.2.1
+
+- Close the POSIX provider on the source-ABI-4 application authority.
+- Require `libpkgapply >= 3.0.1, < 4.0.0`, excluding application 3.0.0
+  whose admitted build-plan interval could still select source ABI 3.
+- Qualify application fixtures against `libpkgbuild-image >= 1.0.1`, the
+  resolver-4-bound image admission release.
+- Preserve `libpkgapply-posix.so.2` and API generation 2; this is a dependency
+  closure release, not a POSIX ABI change.
+
 ## 3.2.0
 
 - Refuse FIFO and other non-regular corruption in private/durable regular-file

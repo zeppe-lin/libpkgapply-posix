@@ -7,27 +7,27 @@ if get_option('tests').allowed()
   test_inc = include_directories('.', 'fixtures')
 
   libpkgbuild_image_test_dep = dependency(
-    'libpkgbuild-image', version: ['>=1.0.0', '<2.0.0'], required: true,
+    'libpkgbuild-image', version: ['>=1.0.1', '<2.0.0'], required: true,
     static: want_static,
   )
   libpkgbuild_plan_test_dep = dependency(
-    'libpkgbuild-plan', version: ['>=1.0.0', '<2.0.0'], required: true,
+    'libpkgbuild-plan', version: ['>=1.1.0', '<2.0.0'], required: true,
     static: want_static,
   )
   libpkgbuild_test_dep = dependency(
-    'libpkgbuild', version: ['>=3.0.0', '<4.0.0'], required: true,
+    'libpkgbuild', version: ['>=3.0.1', '<4.0.0'], required: true,
     static: want_static,
   )
   libpkgcatalog_test_dep = dependency(
-    'libpkgcatalog', version: ['>=3.0.0', '<4.0.0'], required: true,
+    'libpkgcatalog', version: ['>=4.0.0', '<5.0.0'], required: true,
     static: want_static,
   )
   libpkgresolve_test_dep = dependency(
-    'libpkgresolve', version: ['>=3.0.0', '<4.0.0'], required: true,
+    'libpkgresolve', version: ['>=4.0.0', '<5.0.0'], required: true,
     static: want_static,
   )
   libpkgsource_plan_test_dep = dependency(
-    'libpkgsource-plan', version: ['>=1.0.0', '<2.0.0'], required: true,
+    'libpkgsource-plan', version: ['>=2.0.0', '<3.0.0'], required: true,
     static: want_static,
   )
   libpkgsource_test_dep = dependency(

@@ -33,5 +33,5 @@ if find "$root" -type f \( -name '*.scd' -o -name '*.scdoc' \) | grep . >/dev/nu
 fi
 [ -s "$root/docs/man/libpkgapply-posix.3.md" ] || fail 'canonical Markdown manual is absent'
 [ -s "$root/docs/man/generated/libpkgapply-posix.3" ] || fail 'generated roff derivative is absent'
-grep -F '% LIBPKGAPPLY-POSIX(3) libpkgapply-posix | Version 3.2.0' \
+grep -F '% LIBPKGAPPLY-POSIX(3) libpkgapply-posix | Version 3.2.1' \
   "$root/docs/man/libpkgapply-posix.3.md" >/dev/null || fail 'manual title/version metadata is absent'

@@ -5,12 +5,12 @@ A caller selects the target root and private storage directories, acquires a
 `application_posix_backend` from already-open directory descriptors, and hands
 both to `libpkgapply`.
 
-The public metadata exposes `libpkgapply >= 3.0.0` and
+The public metadata exposes `libpkgapply >= 3.0.1, < 4.0.0` and
 `libpkgimage >= 0.4.0` because installed headers use those value types directly.
 Direct `libpkgplan >= 0.3.0` use and `libcrypto` remain private implementation
 requirements and enter consumer flags only for static linkage.
 
-The qualified shared closure binds `libpkgapply >= 3.0.0` to semantic-core ABI
+The qualified shared closure binds `libpkgapply >= 3.0.1, < 4.0.0` to semantic-core ABI
 generation 3 (`libpkgapply.so.3`). `libpkgapply-posix.so.2` remains the provider
 ABI generation; callers must clean-rebuild the provider when replacing the
 pre-release core object so its dynamic dependency names the corrected core

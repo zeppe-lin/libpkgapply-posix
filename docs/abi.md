@@ -1,10 +1,10 @@
 # ELF ABI policy
 
-The additive 3.2.0 release preserves `libpkgapply-posix.so.2`. The SONAME
+The additive 3.2.1 release preserves `libpkgapply-posix.so.2`. The SONAME
 belongs to the already-published in-tree POSIX ABI generation; repository
 extraction does not manufacture an ABI break.
 
-`libpkgapply` 3.0.0 is semantic-core ABI generation 3 and is linked as
+`libpkgapply` 3.0.1 is semantic-core ABI generation 3 and is linked as
 `libpkgapply.so.3`. That dependency transition does not by itself advance the
 provider SONAME: the POSIX callable/RTTI surface remains the reviewed additive
 generation-2 surface, and the core polymorphic interfaces inherited by the
@@ -17,7 +17,7 @@ The published 3.0 semantic core changes the by-value
 lease-bound state projection. POSIX journal-store entry points consume and
 return that core value, so providers built against obsolete pre-release 3.0
 development layouts are not compatible merely because they named the same core
-SONAME. Release qualification rebuilds against published `libpkgapply` 3.0.0;
+SONAME. Release qualification rebuilds against published `libpkgapply` 3.0.1;
 there is no compatibility shim for abandoned development layouts. That closure
 rebuild does not by itself advance the provider SONAME.
 

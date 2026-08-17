@@ -157,6 +157,31 @@ int main()
               pkgapply::fact_state::not_applicable,
           "missing path was not reported absent");
 
+  // Merged-/usr aliases are ordinary symlink leaves, not alternate package
+  // namespace authority. Canonical /usr paths remain observable while an
+  // alias-spelled descendant must fail closed exactly like any other symlink
+  // parent.
+  require(::mkdir((root.path() + "/usr/lib").c_str(), 0755) == 0,
+          "cannot create canonical usr/lib directory");
+  require(::symlink("usr/lib", (root.path() + "/lib").c_str()) == 0,
+          "cannot create merged-/usr lib alias");
+  const auto canonical_library = observer.observe(
+      {pkgplan::package_path::parse("usr/lib/missing.so")});
+  require(find(canonical_library, "usr/lib/missing.so").state() ==
+              pkgapply::fact_state::not_applicable,
+          "observer rejected canonical path beside merged-/usr alias");
+  bool alias_rejected = false;
+  try {
+    static_cast<void>(observer.observe(
+        {pkgplan::package_path::parse("lib/missing.so")}));
+  } catch (const pkgapply::posix::target_observer_error& error) {
+    alias_rejected = error.code() ==
+        pkgapply::posix::target_observer_error_code::path_resolution_failed &&
+        error.path() == "lib/missing.so";
+  }
+  require(alias_rejected,
+          "observer treated merged-/usr alias as package namespace authority");
+
   const int root_fd = ::open(root.path().c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
   require(root_fd >= 0, "cannot open target root descriptor");
   auto anchored =

@@ -192,5 +192,25 @@ main()
   }
   require(refused, "active workspace followed a symbolic-link parent");
 
+  require(::mkdir((root.path() + "/usr/lib").c_str(), 0755) == 0,
+          "cannot create canonical usr/lib directory");
+  require(::symlink("usr/lib", (root.path() + "/lib").c_str()) == 0,
+          "cannot create merged-/usr lib alias");
+  const auto canonical = first.open(
+      pkgplan::package_path::parse("usr/lib/canonical.so"));
+  require(canonical.leaf() == "canonical.so",
+          "active workspace rejected canonical merged-/usr path");
+  bool alias_refused = false;
+  try {
+    static_cast<void>(first.open(
+        pkgplan::package_path::parse("lib/alias.so")));
+  } catch (const pkgapply::posix::detail::active_workspace_error& error) {
+    alias_refused = error.code() == pkgapply::posix::detail::
+        active_workspace_error_code::path_resolution_failed &&
+        error.path() == "lib/alias.so";
+  }
+  require(alias_refused,
+          "active workspace treated merged-/usr alias as namespace authority");
+
   return 0;
 }

@@ -85,7 +85,10 @@ captured as completed authority.
 
 Capture reload verifies attempt, path, purpose, admitted observation, record
 checksum, regular file type, size, stable descriptor interval, and content
-identity before granting a read-only payload descriptor. Exact republication is
+identity before granting a read-only payload descriptor. Live reopened captures
+from one attempt share one descriptor-anchored attempt-directory authority;
+resource use is therefore bounded by live attempts rather than captured-object
+cardinality. Exact republication is
 idempotent and does not reread a target that may already have changed. Namespace
 synchronization remains a separate backend durability operation. A
 checksum-valid record whose canonical path or object facts cannot be admitted by

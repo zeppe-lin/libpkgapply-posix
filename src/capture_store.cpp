@@ -12,6 +12,7 @@
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -69,6 +70,56 @@ public:
 private:
   int value_;
 };
+
+class shared_attempt_directory final {
+public:
+  shared_attempt_directory(unique_fd descriptor, dev_t device, ino_t inode) noexcept
+      : descriptor_(std::move(descriptor)), device_(device), inode_(inode)
+  {
+  }
+
+  [[nodiscard]] int descriptor() const noexcept { return descriptor_.get(); }
+  [[nodiscard]] dev_t device() const noexcept { return device_; }
+  [[nodiscard]] ino_t inode() const noexcept { return inode_; }
+
+private:
+  unique_fd descriptor_;
+  dev_t device_;
+  ino_t inode_;
+};
+
+[[nodiscard]] std::shared_ptr<shared_attempt_directory>
+share_attempt_directory(unique_fd descriptor)
+{
+  struct stat status {};
+  if (::fstat(descriptor.get(), &status) != 0)
+    throw capture_store_error(
+        capture_store_error_code::directory_invalid, errno, {},
+        "cannot inspect capture attempt directory");
+  if (!S_ISDIR(status.st_mode))
+    throw capture_store_error(
+        capture_store_error_code::directory_invalid, ENOTDIR, {},
+        "capture attempt authority is not a directory");
+
+  static std::mutex mutex;
+  static std::vector<std::weak_ptr<shared_attempt_directory>> retained;
+  std::lock_guard<std::mutex> lock(mutex);
+  for (auto item = retained.begin(); item != retained.end();) {
+    auto current = item->lock();
+    if (!current) {
+      item = retained.erase(item);
+      continue;
+    }
+    if (current->device() == status.st_dev && current->inode() == status.st_ino)
+      return current;
+    ++item;
+  }
+
+  auto result = std::make_shared<shared_attempt_directory>(
+      std::move(descriptor), status.st_dev, status.st_ino);
+  retained.emplace_back(result);
+  return result;
+}
 
 struct evp_context_deleter final {
   void operator()(EVP_MD_CTX* context) const noexcept
@@ -1408,9 +1459,14 @@ publish_payload(int attempt_fd,
 
 class captured_old_object::implementation final {
 public:
-  implementation(unique_fd attempt_fd, captured_record record)
-      : attempt_fd_(std::move(attempt_fd)), record_(std::move(record)) {}
-  unique_fd attempt_fd_;
+  implementation(
+      std::shared_ptr<shared_attempt_directory> attempt_directory,
+      captured_record record)
+      : attempt_directory_(std::move(attempt_directory)),
+        record_(std::move(record))
+  {
+  }
+  std::shared_ptr<shared_attempt_directory> attempt_directory_;
   captured_record record_;
 };
 
@@ -1487,7 +1543,8 @@ bool captured_old_object::exact_recovery_possible() const noexcept
 { return state_->record_.exact_recovery_possible; }
 captured_regular_object captured_old_object::open_regular() const
 {
-  unique_fd file = open_verified_payload(state_->attempt_fd_.get(), state_->record_);
+  unique_fd file = open_verified_payload(
+      state_->attempt_directory_->descriptor(), state_->record_);
   const auto size = *state_->record_.observation.object()->size().value();
   return captured_regular_object(file.release(), size);
 }
@@ -1611,7 +1668,7 @@ std::optional<captured_old_object> application_capture_store::load(
   if (record.observation.object()->kind() == completed_object_kind::regular)
     static_cast<void>(open_verified_payload(attempt_fd.get(), record));
   return captured_old_object(std::make_unique<captured_old_object::implementation>(
-      std::move(attempt_fd), std::move(record)));
+      share_attempt_directory(std::move(attempt_fd)), std::move(record)));
 }
 
 old_object_capture_result application_capture_store::capture(

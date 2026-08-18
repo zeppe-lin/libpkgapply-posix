@@ -24,7 +24,8 @@ The evidence roles are distinct:
 1. `unit` qualifies local typed values and stable error vocabularies without
    requiring a filesystem mechanism.
 2. `mechanism` exercises descriptor anchoring, refusal categories, immutable
-   publication, exact replay, synchronization, recovery, and crash seams. Tests
+   publication, exact replay, bounded live-capture descriptor cardinality under
+   constrained `RLIMIT_NOFILE`, synchronization, recovery, and crash seams. Tests
    of the non-installed active-namespace and workspace implementation link a
    private static test target built from the production source list; they never
    require private symbols from the installed shared library.

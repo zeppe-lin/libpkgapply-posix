@@ -21,7 +21,9 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <sys/resource.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <vector>
 
@@ -197,6 +199,58 @@ void corrupt_record_path(const std::string& storage, std::string_view path)
   require(output.good(), "cannot finish corrupt capture record");
 }
 
+
+void require_bounded_live_capture_descriptors(
+    const pkgapply::posix::application_capture_store& store,
+    const pkgapply::application_attempt& admitted_attempt,
+    const pkgapply::backend_observation_batch& observations,
+    const std::vector<pkgapply::old_object_capture_request>& requests)
+{
+  const pid_t child = ::fork();
+  require(child >= 0, "cannot fork capture descriptor stress witness");
+  if (child == 0) {
+    struct rlimit original {};
+    if (::getrlimit(RLIMIT_NOFILE, &original) != 0)
+      _exit(90);
+    const rlim_t wanted = std::min<rlim_t>(original.rlim_cur, 48U);
+    if (wanted < 24U)
+      _exit(91);
+    struct rlimit constrained = original;
+    constrained.rlim_cur = wanted;
+    if (::setrlimit(RLIMIT_NOFILE, &constrained) != 0)
+      _exit(92);
+
+    try {
+      std::vector<pkgapply::posix::captured_old_object> retained;
+      retained.reserve(requests.size());
+      for (const auto& request : requests) {
+        const auto* observation = observations.find(request.path());
+        if (observation == nullptr)
+          _exit(93);
+        auto loaded = store.load(admitted_attempt, request, *observation);
+        if (!loaded)
+          _exit(94);
+        retained.push_back(std::move(*loaded));
+      }
+      if (retained.size() != requests.size())
+        _exit(95);
+    } catch (const std::exception& error) {
+      std::cerr << "capture descriptor stress failed: " << error.what() << '\n';
+      _exit(96);
+    }
+    _exit(0);
+  }
+
+  int status = 0;
+  while (::waitpid(child, &status, 0) < 0) {
+    if (errno == EINTR)
+      continue;
+    require(false, "cannot wait for capture descriptor stress witness");
+  }
+  require(WIFEXITED(status) && WEXITSTATUS(status) == 0,
+          "live capture authority consumes one descriptor per object");
+}
+
 } // namespace
 
 int main()
@@ -230,6 +284,36 @@ int main()
   const auto admitted_attempt = attempt(20);
   auto store = pkgapply::posix::application_capture_store::open(
       storage.path(), target.path());
+
+  const std::string stress = usr + "/capture-stress";
+  require(::mkdir(stress.c_str(), 0755) == 0,
+          "cannot create capture descriptor stress root");
+  std::vector<pkgplan::package_path> stress_paths;
+  std::vector<pkgapply::old_object_capture_request> stress_requests;
+  constexpr std::size_t stress_count = 96U;
+  stress_paths.reserve(stress_count);
+  stress_requests.reserve(stress_count);
+  for (std::size_t index = 0; index < stress_count; ++index) {
+    const std::string leaf = "entry-" + std::to_string(index);
+    require(::mkdir((stress + "/" + leaf).c_str(), 0755) == 0,
+            "cannot create capture descriptor stress entry");
+    auto path = pkgplan::package_path::parse("usr/capture-stress/" + leaf);
+    stress_requests.emplace_back(path, false, true);
+    stress_paths.push_back(std::move(path));
+  }
+  const auto stress_observations = observer.observe(stress_paths);
+  for (const auto& request : stress_requests) {
+    const auto* observation = stress_observations.find(request.path());
+    require(observation != nullptr,
+            "capture descriptor stress observation is absent");
+    const auto result = store.capture(
+        admitted_attempt, request, *observation);
+    require(result.outcome() == pkgapply::backend_operation_outcome::completed &&
+                result.exact_recovery_possible(),
+            "capture descriptor stress authority was not retained");
+  }
+  require_bounded_live_capture_descriptors(
+      store, admitted_attempt, stress_observations, stress_requests);
 
   const pkgapply::old_object_capture_request tool_request(tool, true, true);
   const auto tool_result = store.capture(

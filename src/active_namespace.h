@@ -66,8 +66,8 @@ public:
   /*! \brief Synchronize all active objects and parents changed so far. */
   [[nodiscard]] application_durability_fact synchronize();
 
-  /* Internal descriptor retention used by mechanism helpers. */
-  void retain_dirty_descriptor(int descriptor);
+  /* Internal filesystem-level durability authority used by mechanism helpers. */
+  void retain_dirty_filesystem(int descriptor);
 
 private:
   application_active_namespace(
@@ -129,8 +129,14 @@ private:
   const sealed_application_payloads* payloads_ = nullptr;
   std::vector<application_path_observation> admitted_;
   std::vector<captured_old_object> captures_;
+  struct dirty_filesystem_authority final {
+    std::uint64_t device;
+    int descriptor;
+  };
+
   std::vector<attempted_effect> effects_;
-  std::vector<int> dirty_descriptors_;
+  std::vector<dirty_filesystem_authority> dirty_filesystems_;
+  bool durability_authority_incomplete_ = false;
 };
 
 } // namespace pkgapply::posix::detail

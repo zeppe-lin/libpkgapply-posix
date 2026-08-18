@@ -101,6 +101,18 @@ duplicate_fd(int descriptor)
 #endif
 }
 
+[[nodiscard]] int
+synchronize_filesystem(int descriptor) noexcept
+{
+#ifdef __linux__
+  return ::syncfs(descriptor);
+#else
+  static_cast<void>(descriptor);
+  errno = ENOTSUP;
+  return -1;
+#endif
+}
+
 [[nodiscard]] std::optional<struct stat>
 stat_leaf(int parent, const std::string& name)
 {
@@ -730,7 +742,7 @@ update_existing_directory(application_active_namespace& target,
     changed = true;
   }
   if (changed)
-    target.retain_dirty_descriptor(directory.release());
+    target.retain_dirty_filesystem(directory.get());
   return operation(backend_operation_outcome::completed);
 }
 
@@ -1116,37 +1128,41 @@ application_active_namespace::application_active_namespace(
       admitted_(std::move(other.admitted_)),
       captures_(std::move(other.captures_)),
       effects_(std::move(other.effects_)),
-      dirty_descriptors_(std::move(other.dirty_descriptors_))
+      dirty_filesystems_(std::move(other.dirty_filesystems_)),
+      durability_authority_incomplete_(other.durability_authority_incomplete_)
 {
   other.incoming_image_ = nullptr;
   other.payloads_ = nullptr;
-  other.dirty_descriptors_.clear();
+  other.dirty_filesystems_.clear();
+  other.durability_authority_incomplete_ = false;
 }
 
 application_active_namespace& application_active_namespace::operator=(
     application_active_namespace&& other) noexcept
 {
   if (this != &other) {
-    for (int descriptor : dirty_descriptors_)
-      static_cast<void>(::close(descriptor));
+    for (const auto& authority : dirty_filesystems_)
+      static_cast<void>(::close(authority.descriptor));
     workspace_ = std::move(other.workspace_);
     incoming_image_ = other.incoming_image_;
     payloads_ = other.payloads_;
     admitted_ = std::move(other.admitted_);
     captures_ = std::move(other.captures_);
     effects_ = std::move(other.effects_);
-    dirty_descriptors_ = std::move(other.dirty_descriptors_);
+    dirty_filesystems_ = std::move(other.dirty_filesystems_);
+    durability_authority_incomplete_ = other.durability_authority_incomplete_;
     other.incoming_image_ = nullptr;
     other.payloads_ = nullptr;
-    other.dirty_descriptors_.clear();
+    other.dirty_filesystems_.clear();
+    other.durability_authority_incomplete_ = false;
   }
   return *this;
 }
 
 application_active_namespace::~application_active_namespace()
 {
-  for (int descriptor : dirty_descriptors_)
-    static_cast<void>(::close(descriptor));
+  for (const auto& authority : dirty_filesystems_)
+    static_cast<void>(::close(authority.descriptor));
 }
 
 const application_path_observation* application_active_namespace::admitted(
@@ -1553,7 +1569,7 @@ bool application_active_namespace::refresh_ancestor_directories(
       if (directory.get() < 0 ||
           !apply_descriptor_metadata(directory.get(), *entry))
         return false;
-      retain_dirty_descriptor(directory.release());
+      retain_dirty_filesystem(directory.get());
     }
   }
 
@@ -1584,7 +1600,7 @@ bool application_active_namespace::refresh_ancestor_directories(
     if (!refreshed.succeeded)
       return false;
     if (refreshed.changed)
-      retain_dirty_descriptor(directory.release());
+      retain_dirty_filesystem(directory.get());
   }
   return true;
 }
@@ -1655,11 +1671,33 @@ void application_active_namespace::retain_completed_effect(
   complete_effect(request.path(), incoming);
 }
 
-void application_active_namespace::retain_dirty_descriptor(int descriptor)
+void application_active_namespace::retain_dirty_filesystem(int descriptor)
 {
-  if (descriptor < 0)
-    throw std::invalid_argument("invalid active durability descriptor");
-  dirty_descriptors_.push_back(descriptor);
+  if (descriptor < 0) {
+    durability_authority_incomplete_ = true;
+    return;
+  }
+
+  struct stat status {};
+  if (::fstat(descriptor, &status) != 0) {
+    durability_authority_incomplete_ = true;
+    return;
+  }
+  const auto device = static_cast<std::uint64_t>(status.st_dev);
+  const auto existing = std::find_if(
+      dirty_filesystems_.begin(), dirty_filesystems_.end(),
+      [device](const auto& authority) {
+        return authority.device == device;
+      });
+  if (existing != dirty_filesystems_.end())
+    return;
+
+  const int retained = duplicate_fd(descriptor);
+  if (retained < 0) {
+    durability_authority_incomplete_ = true;
+    return;
+  }
+  dirty_filesystems_.push_back({device, retained});
 }
 
 backend_operation_result application_active_namespace::publish_incoming(
@@ -1726,10 +1764,14 @@ backend_operation_result application_active_namespace::publish_incoming(
       publish_prepared(
           workspace, entry, std::move(prepared),
           capture(request.path()) != nullptr);
-  if (published.object_descriptor >= 0)
-    retain_dirty_descriptor(published.object_descriptor);
-  if (published.parent_descriptor >= 0)
-    retain_dirty_descriptor(published.parent_descriptor);
+  if (published.object_descriptor >= 0) {
+    retain_dirty_filesystem(published.object_descriptor);
+    static_cast<void>(::close(published.object_descriptor));
+  }
+  if (published.parent_descriptor >= 0) {
+    retain_dirty_filesystem(published.parent_descriptor);
+    static_cast<void>(::close(published.parent_descriptor));
+  }
   if (published.result.outcome() == backend_operation_outcome::completed) {
     complete_effect(request.path(), true);
     if (!refresh_ancestor_directories(request.path()))
@@ -1792,9 +1834,7 @@ backend_operation_result application_active_namespace::remove(
         workspace.parent_descriptor(), workspace.leaf().c_str(), flags);
   }
   if (result == 0) {
-    const int parent = duplicate_fd(workspace.parent_descriptor());
-    if (parent >= 0)
-      retain_dirty_descriptor(parent);
+    retain_dirty_filesystem(workspace.parent_descriptor());
     complete_effect(request.path(), false);
     if (!refresh_ancestor_directories(request.path()))
       return operation(backend_operation_outcome::indeterminate);
@@ -1863,9 +1903,7 @@ backend_operation_result application_active_namespace::recover(
     {
       return operation(backend_operation_outcome::indeterminate);
     }
-    const int parent = duplicate_fd(workspace.parent_descriptor());
-    if (parent >= 0)
-      retain_dirty_descriptor(parent);
+    retain_dirty_filesystem(workspace.parent_descriptor());
     return completed_recovery();
   }
 
@@ -1894,9 +1932,7 @@ backend_operation_result application_active_namespace::recover(
     {
       return operation(backend_operation_outcome::indeterminate);
     }
-    const int parent = duplicate_fd(workspace.parent_descriptor());
-    if (parent >= 0)
-      retain_dirty_descriptor(parent);
+    retain_dirty_filesystem(workspace.parent_descriptor());
     return completed_recovery();
   }
 
@@ -1954,10 +1990,14 @@ backend_operation_result application_active_namespace::recover(
   }();
   prepared_publication published = publish_recovery(
       workspace, std::move(prepared));
-  if (published.object_descriptor >= 0)
-    retain_dirty_descriptor(published.object_descriptor);
-  if (published.parent_descriptor >= 0)
-    retain_dirty_descriptor(published.parent_descriptor);
+  if (published.object_descriptor >= 0) {
+    retain_dirty_filesystem(published.object_descriptor);
+    static_cast<void>(::close(published.object_descriptor));
+  }
+  if (published.parent_descriptor >= 0) {
+    retain_dirty_filesystem(published.parent_descriptor);
+    static_cast<void>(::close(published.parent_descriptor));
+  }
   if (published.result.outcome() != backend_operation_outcome::completed)
     return published.result;
   return completed_recovery();
@@ -2027,9 +2067,7 @@ backend_operation_result application_active_namespace::discard_recovery(
   {
     return operation(backend_operation_outcome::indeterminate);
   }
-  const int parent = duplicate_fd(workspace.parent_descriptor());
-  if (parent >= 0)
-    retain_dirty_descriptor(parent);
+  retain_dirty_filesystem(workspace.parent_descriptor());
   if (!refresh_ancestor_directories(path))
     return operation(backend_operation_outcome::indeterminate);
   return operation(backend_operation_outcome::completed);
@@ -2037,10 +2075,16 @@ backend_operation_result application_active_namespace::discard_recovery(
 
 application_durability_fact application_active_namespace::synchronize()
 {
-  for (int descriptor : dirty_descriptors_) {
+  if (durability_authority_incomplete_) {
+    return application_durability_fact(
+        application_durability_domain::active_namespace,
+        application_durability_status::unconfirmed);
+  }
+
+  for (const auto& authority : dirty_filesystems_) {
     int result;
     do {
-      result = ::fsync(descriptor);
+      result = synchronize_filesystem(authority.descriptor);
     } while (result != 0 && errno == EINTR);
     if (result != 0) {
       return application_durability_fact(
@@ -2048,9 +2092,9 @@ application_durability_fact application_active_namespace::synchronize()
           application_durability_status::unconfirmed);
     }
   }
-  for (int descriptor : dirty_descriptors_)
-    static_cast<void>(::close(descriptor));
-  dirty_descriptors_.clear();
+  for (const auto& authority : dirty_filesystems_)
+    static_cast<void>(::close(authority.descriptor));
+  dirty_filesystems_.clear();
   return application_durability_fact(
       application_durability_domain::active_namespace,
       application_durability_status::confirmed);

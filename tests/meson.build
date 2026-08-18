@@ -187,6 +187,7 @@ if get_option('tests').allowed()
   )
 
   foreach contract : [
+    'active_namespace_source',
     'architecture_contract',
     'abi_contract',
     'ci_contract',

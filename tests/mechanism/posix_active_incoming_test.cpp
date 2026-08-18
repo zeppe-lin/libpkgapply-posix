@@ -8,6 +8,7 @@
 #include <libpkgapply-posix/target_observer.h>
 #include <libpkgimage/package_archive.h>
 
+#include <algorithm>
 #include <array>
 #include <cerrno>
 #include <cstddef>
@@ -25,7 +26,9 @@
 
 #include <fcntl.h>
 #include <openssl/evp.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 namespace {
@@ -347,11 +350,86 @@ observe(pkgapply::posix::application_target_observer& observer,
           pkgplan::package_path::parse("usr/bin/tool"))}).observations();
 }
 
+void
+require_bounded_active_durability_descriptors()
+{
+  temporary_directory target("libpkgapply-active-descriptor-stress");
+  make_directory(target.path() + "/stress");
+
+  std::vector<pkgimage::package_entry> entries;
+  constexpr std::size_t stress_count = 96U;
+  entries.reserve(stress_count);
+  for (std::size_t index = 0; index < stress_count; ++index)
+    entries.push_back(directory(
+        "stress/entry-" + std::to_string(index), 0755));
+  memory_archive archive(
+      std::move(entries), std::vector<std::string>(stress_count));
+
+  const pid_t child = ::fork();
+  require(child >= 0, "cannot fork active descriptor stress witness");
+  if (child == 0) {
+    struct rlimit original {};
+    if (::getrlimit(RLIMIT_NOFILE, &original) != 0)
+      _exit(90);
+    const rlim_t wanted = std::min<rlim_t>(original.rlim_cur, 48U);
+    if (wanted < 24U)
+      _exit(91);
+    struct rlimit constrained = original;
+    constrained.rlim_cur = wanted;
+    if (::setrlimit(RLIMIT_NOFILE, &constrained) != 0)
+      _exit(92);
+
+    try {
+      auto observer =
+          pkgapply::posix::application_target_observer::open(target.path());
+      std::vector<pkgplan::package_path> paths;
+      paths.reserve(archive.image().size());
+      for (const auto& value : archive.image().entries())
+        paths.push_back(pkgplan::package_path::parse(value.path.string()));
+      const auto observations = observer.observe(std::move(paths));
+
+      const int root_descriptor = ::open(
+          target.path().c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+      if (root_descriptor < 0)
+        _exit(93);
+      auto active =
+          pkgapply::posix::detail::application_active_namespace::bind(
+              root_descriptor, attempt(90), archive.image(), nullptr,
+              observations.observations());
+      for (const auto& value : archive.image().entries()) {
+        if (active.publish_incoming(activate(value)).outcome() !=
+            pkgapply::backend_operation_outcome::completed)
+          _exit(94);
+      }
+      if (active.synchronize().status() !=
+          pkgapply::application_durability_status::confirmed)
+        _exit(95);
+      if (::close(root_descriptor) != 0)
+        _exit(96);
+    } catch (const std::exception& error) {
+      std::cerr << "active descriptor stress failed: " << error.what() << '\n';
+      _exit(97);
+    }
+    _exit(0);
+  }
+
+  int status = 0;
+  while (::waitpid(child, &status, 0) < 0) {
+    if (errno == EINTR)
+      continue;
+    require(false, "cannot wait for active descriptor stress witness");
+  }
+  require(WIFEXITED(status) && WEXITSTATUS(status) == 0,
+          "active durability consumes one live descriptor per mutated path");
+}
+
 } // namespace
 
 int
 main()
 {
+  require_bounded_active_durability_descriptors();
+
   temporary_directory target("libpkgapply-active-incoming");
   temporary_directory payload_root("libpkgapply-active-payload");
   temporary_directory capture_root("libpkgapply-active-capture");

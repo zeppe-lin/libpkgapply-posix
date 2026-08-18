@@ -23,7 +23,7 @@
 
 namespace {
 
-std::atomic<bool> fail_next_fsync{false};
+std::atomic<bool> fail_next_syncfs{false};
 
 void
 require(bool condition, std::string_view message)
@@ -203,13 +203,13 @@ test_descendant_removal_preserves_ancestor_authority()
 } // namespace
 
 extern "C" int
-fsync(int descriptor)
+syncfs(int descriptor)
 {
-  if (fail_next_fsync.exchange(false, std::memory_order_relaxed)) {
+  if (fail_next_syncfs.exchange(false, std::memory_order_relaxed)) {
     errno = EIO;
     return -1;
   }
-  return static_cast<int>(::syscall(SYS_fsync, descriptor));
+  return static_cast<int>(::syscall(SYS_syncfs, descriptor));
 }
 
 int
@@ -318,7 +318,7 @@ main()
   require(!absent(root.path() + "/tmp/collision"),
           "workspace collision changed the logical target");
 
-  fail_next_fsync.store(true, std::memory_order_relaxed);
+  fail_next_syncfs.store(true, std::memory_order_relaxed);
   require(active.synchronize().status() ==
               pkgapply::application_durability_status::unconfirmed,
           "active synchronization failure was not reported as unconfirmed");

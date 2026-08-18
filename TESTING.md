@@ -24,8 +24,9 @@ The evidence roles are distinct:
 1. `unit` qualifies local typed values and stable error vocabularies without
    requiring a filesystem mechanism.
 2. `mechanism` exercises descriptor anchoring, refusal categories, immutable
-   publication, exact replay, bounded live-capture descriptor cardinality under
-   constrained `RLIMIT_NOFILE`, synchronization, recovery, and crash seams. Tests
+   publication, exact replay, bounded live-capture and active-durability
+   descriptor cardinality under constrained `RLIMIT_NOFILE`, synchronization,
+   recovery, and crash seams. Tests
    of the non-installed active-namespace and workspace implementation link a
    private static test target built from the production source list; they never
    require private symbols from the installed shared library.
@@ -34,8 +35,9 @@ The evidence roles are distinct:
    restart, descriptor retention, completed rejected-record identity reopening,
    historical-to-current completed-evidence projection refresh, and all six
    durability domains. The
-   durability-failure case injects real `fsync(2)` failure: active-namespace
-   fault classification is proved at the direct mechanism seam, while journal,
+   durability-failure case injects real storage synchronization failure.
+   Active-namespace `syncfs(2)` fault classification is proved at the direct
+   mechanism seam, while journal,
    incoming staging, recovery staging, rejected storage, and completed evidence
    are proved through `application_backend_transaction::synchronize()`.
 4. `header` compiles every installed header independently through one generic

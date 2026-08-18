@@ -77,13 +77,13 @@ then
 fi
 
 # The reference provider must prove the semantic durability-failure channel;
-# merely calling fsync(2) in store implementations is not qualification.
+# merely calling a storage synchronization primitive is not qualification.
 grep -F 'fail_next_fsync' "$root/tests/integration/durability_failure_test.cpp" >/dev/null ||
   fail 'durability regression does not inject a real synchronization failure'
 grep -F 'application_durability_status::unconfirmed' \
   "$root/tests/integration/durability_failure_test.cpp" >/dev/null ||
   fail 'durability regression does not require unconfirmed semantic evidence'
-grep -F 'fail_next_fsync' \
+grep -F 'fail_next_syncfs' \
   "$root/tests/mechanism/posix_active_removal_test.cpp" >/dev/null ||
   fail 'active-namespace mechanism lacks synchronization fault injection'
 grep -F 'application_durability_status::unconfirmed' \

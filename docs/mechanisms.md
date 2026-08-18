@@ -199,8 +199,8 @@ workspace.
 A completed child publication or removal can itself change metadata on an
 admitted ancestor directory. Before reporting that child effect completed, the
 POSIX mechanism re-establishes the selected admitted or incoming metadata for
-affected ancestor directories and retains any changed directory descriptor for
-active-namespace synchronization. It does not reinterpret provider-caused
+affected ancestor directories and records the filesystem containing that change
+for active-namespace synchronization. It does not reinterpret provider-caused
 metadata drift as fresh caller authority. Unexpected absence, type change,
 ownership or mode change, or other race after admission is indeterminate unless
 the mechanism can prove that its own command established the final state.
@@ -213,11 +213,15 @@ removing an object proven to belong to the same attempt. Ambiguous workspace or
 final-path state is indeterminate; incomplete capture authority never becomes a
 claim of exact restoration.
 
-Visibility and durability remain separate. Active publication records dirty
-regular descriptors and affected parent directories. Synchronizing the active
-namespace flushes the required content, metadata, and directory entries, and
-clears no dirty state until the whole selected guarantee succeeds. A successful
-`renameat()` is not promoted into global filesystem atomicity or durability.
+Visibility and durability remain separate. Active publication retains at most
+one representative descriptor for each filesystem containing a changed active
+object or namespace entry. Repeated paths on the same filesystem therefore do
+not consume additional live descriptors. Synchronizing the active namespace
+issues one `syncfs(2)` barrier per retained filesystem authority, preserving the
+representatives for exact retry when a barrier is unconfirmed and clearing them
+only after every selected filesystem reports success. No current package path is
+reopened to reconstruct durability authority. A successful `renameat()` is not
+promoted into global filesystem atomicity or durability.
 
 The deterministic parent-local names are restart machinery, not canonical
 application evidence. A reopened transaction inspects those names and the

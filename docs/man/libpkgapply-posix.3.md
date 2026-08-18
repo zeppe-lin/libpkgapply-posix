@@ -1,4 +1,4 @@
-% LIBPKGAPPLY-POSIX(3) libpkgapply-posix | Version 3.2.1
+% LIBPKGAPPLY-POSIX(3) libpkgapply-posix | Version 3.2.2
 
 
 # NAME

@@ -1,5 +1,17 @@
 # History
 
+## 3.2.2
+
+- Bound reopened old-object capture descriptor retention by live application
+  attempt rather than captured-object count. Captures from one exact attempt now
+  share one descriptor-anchored attempt-directory authority while preserving
+  independent immutable capture records and on-demand payload verification.
+- Add a constrained-`RLIMIT_NOFILE` mechanism witness retaining 96 captures from
+  one attempt, preventing small synthetic packages from hiding descriptor
+  cardinality regressions.
+- Preserve `libpkgapply-posix.so.2` and API generation 2; no public layout,
+  identity domain, durable encoding, or capture semantics change.
+
 ## 3.2.1
 
 - Close the POSIX provider on the source-ABI-4 application authority.

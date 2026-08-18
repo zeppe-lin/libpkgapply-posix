@@ -1,5 +1,5 @@
 PROJECT_NAME           = libpkgapply-posix
-PROJECT_NUMBER         = 3.2.1
+PROJECT_NUMBER         = 3.2.2
 PROJECT_BRIEF          = "POSIX mechanisms for libpkgapply"
 OUTPUT_DIRECTORY       = build/docs
 OUTPUT_LANGUAGE        = English

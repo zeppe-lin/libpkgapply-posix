@@ -8,7 +8,7 @@ fail(){ echo "manpage-source-test: $*" >&2; exit 1; }
 source=$root/docs/man/libpkgapply-posix.3.md
 [ -s "$source" ] || fail 'missing canonical source: docs/man/libpkgapply-posix.3.md'
 first=$(sed -n '1p' "$source")
-[ "$first" = '% LIBPKGAPPLY-POSIX(3) libpkgapply-posix | Version 3.2.2' ] ||
+[ "$first" = '% LIBPKGAPPLY-POSIX(3) libpkgapply-posix | Version 3.2.3' ] ||
   fail "invalid Pandoc title: $first"
 grep -F '# NAME' "$source" >/dev/null || fail 'NAME section missing'
 grep -F '# SEE ALSO' "$source" >/dev/null || fail 'SEE ALSO section missing'

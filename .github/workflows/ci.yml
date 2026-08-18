@@ -156,7 +156,7 @@ jobs:
         run: ./ci/qualify-installed.sh build "${{ matrix.mode }}"
       - name: Qualify installed HTML documentation
         if: matrix.html_docs == 'enabled'
-        run: ./ci/qualify-html-docs.sh build libpkgapply-posix 3.2.2
+        run: ./ci/qualify-html-docs.sh build libpkgapply-posix 3.2.3
 
   sanitizers:
     name: ${{ matrix.name }} address,undefined

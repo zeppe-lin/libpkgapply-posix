@@ -1,5 +1,23 @@
 # History
 
+## 3.2.3
+
+- Bound active-namespace durability descriptor retention by touched filesystem
+  rather than mutated path. The mechanism retains at most one representative
+  descriptor per observed `st_dev` and uses one filesystem durability barrier
+  per retained authority, so large package application no longer exhausts the
+  supervisor descriptor table before final synchronization.
+- Preserve deferred durability and exact retry semantics: failed filesystem
+  barriers retain their descriptor authorities, while successful barriers clear
+  them only after every touched filesystem is confirmed. No current package path
+  is reopened to reconstruct durability authority.
+- Add a constrained-`RLIMIT_NOFILE` witness publishing 96 active paths and
+  require the complete operation to synchronize under a 48-descriptor soft
+  limit.
+- Preserve `libpkgapply-posix.so.2` and API generation 2; no public layout,
+  identity domain, durable encoding, planner/application semantics, or state
+  vocabulary changes.
+
 ## 3.2.2
 
 - Bound reopened old-object capture descriptor retention by live application

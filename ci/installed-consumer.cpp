@@ -51,7 +51,7 @@ private:
 
 int main()
 {
-  if (pkgapply::posix::version() != "3.2.2" ||
+  if (pkgapply::posix::version() != "3.2.3" ||
       pkgapply::posix::api_version != 2)
   {
     return 1;

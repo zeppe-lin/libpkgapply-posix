@@ -1,7 +1,7 @@
 # POSIX mechanism protocols
 
 The following mechanism notes were extracted from the libpkgapply 2.3.0 design document.
-They describe the implementation owned by libpkgapply-posix 3.2.2.
+They describe the implementation owned by libpkgapply-posix 3.2.3.
 
 The POSIX storage layer remains deliberately byte-oriented. Journal storage
 derives one safe filename from the stable journal identity, opens the store as a

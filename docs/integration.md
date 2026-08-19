@@ -1,25 +1,33 @@
 # Integration
 
-A caller selects the target root and private storage directories, acquires a
-`pkgapply::posix::target_mutation_lease`, constructs
-`application_posix_backend` from already-open directory descriptors, and hands
-both to `libpkgapply`.
+A controller selects the managed target and five mechanism directories for the
+POSIX backend: target root, payload store, capture store, rejected store, and
+completed-evidence store. It constructs `application_posix_backend` from those
+open descriptors.
 
-The public metadata exposes `libpkgapply >= 3.0.1, < 4.0.0` and
-`libpkgimage >= 0.4.0` because installed headers use those value types directly.
-Direct `libpkgplan >= 0.3.0` use and `libcrypto` remain private implementation
-requirements and enter consumer flags only for static linkage.
+Journal persistence is wired separately:
 
-The qualified shared closure binds `libpkgapply >= 3.0.1, < 4.0.0` to semantic-core ABI
-generation 3 (`libpkgapply.so.3`). `libpkgapply-posix.so.2` remains the provider
-ABI generation; callers must clean-rebuild the provider when replacing the
-pre-release core object so its dynamic dependency names the corrected core
-SONAME.
+```cpp
+auto journal = pkgapply::posix::application_journal_store::open(journal_path);
+auto backend = pkgapply::posix::application_posix_backend::from_directory_fds(
+    target, target_fd, payload_fd, capture_fd, rejected_fd, completed_fd);
 
-Repository separation is intentional. A non-POSIX backend may implement the
-same `libpkgapply` contracts without inheriting POSIX storage layout, system
-calls, or failure categories. Rejected-object record identity becomes a direct
-reopening key only because this provider explicitly indexes and validates it;
-consumers must not derive or scan the private POSIX storage layout. Conversely,
-POSIX mechanism changes can be reviewed without touching semantic application
-policy.
+auto receipt = pkgapply::apply(
+    request, state, lease, *backend, *journal, archive);
+```
+
+On restart the controller resolves the exact declaration through its retained
+identity or the POSIX store's direct request locator, reacquires a current
+mutation lease/state projection, and calls `pkgapply::resume_application()`.
+`libpkgapply` loads declaration/steps/cursor, validates the owner chain, derives
+an ephemeral restart view, and only then asks the POSIX backend to reopen
+subordinate physical evidence.
+
+The provider never scans the journal namespace to choose a newest attempt. The
+request locator is mutable routing metadata and is validated against the exact
+referenced declaration before use.
+
+Public metadata exposes `libpkgapply >= 4.0.0, < 5.0.0` and
+`libpkgimage >= 0.4.0`. Direct `libpkgplan >= 0.3.0` use and `libcrypto` remain
+private. The qualified shared closure is `libpkgapply-posix.so.3` with a direct
+`NEEDED libpkgapply.so.4` edge.

@@ -4,9 +4,7 @@
 #include <libpkgapply-posix/backend.h>
 
 #include <libpkgapply-posix/capture_store.h>
-#include <libpkgapply-posix/checkpoint_store.h>
 #include <libpkgapply-posix/completed_evidence_store.h>
-#include <libpkgapply-posix/journal_store.h>
 #include <libpkgapply-posix/payload_stage.h>
 #include <libpkgapply-posix/rejected_store.h>
 #include <libpkgapply-posix/target_observer.h>
@@ -279,25 +277,6 @@ durability_index(application_durability_domain domain)
   return static_cast<std::size_t>(value - 1U);
 }
 
-[[nodiscard]] application_durability_profile
-make_durability(const std::array<application_durability_status, 6>& statuses)
-{
-  std::vector<application_durability_fact> facts;
-  facts.reserve(statuses.size());
-  for (std::size_t index = 0; index < statuses.size(); ++index) {
-    facts.emplace_back(
-        static_cast<application_durability_domain>(index + 1U),
-        statuses[index]);
-  }
-  return application_durability_profile(std::move(facts));
-}
-
-[[nodiscard]] bool
-terminal_cleanup_allowed(application_journal_state state) noexcept
-{
-  return state == application_journal_state::finalized;
-}
-
 void
 validate_backend_binding(const application_target_context& configured,
                          const package_application_request& request,
@@ -344,23 +323,18 @@ validate_without_incoming(const package_application_request& request)
 }
 
 void
-validate_restart_journal(const application_target_context& configured,
-                         const package_application_request& request,
-                         const application_journal_record& journal)
+validate_restart_view(const application_target_context& configured,
+                      const package_application_request& request,
+                      const application_restart_view& restart)
 {
-  const auto& header = journal.header();
-  if (header.request() != request.identity() ||
-      header.plan() != request.plan() ||
-      header.target() != configured.identity() ||
-      header.control() != request.control().identity() ||
-      header.backend() != configured.mutation_backend() ||
-      header.attempt().request() != request.identity() ||
-      header.attempt().target() != configured.identity() ||
-      header.attempt().backend() != configured.mutation_backend())
+  const auto& attempt = restart.attempt();
+  if (attempt.request() != request.identity() ||
+      attempt.target() != configured.identity() ||
+      attempt.backend() != configured.mutation_backend())
   {
     throw_backend(posix_backend_error_code::restart_authority_mismatch,
                   EINVAL,
-                  "durable journal does not belong to the exact application request");
+                  "owner restart view does not belong to the exact application request");
   }
 }
 
@@ -414,21 +388,16 @@ public:
       std::optional<pkgimage::package_image> incoming_image,
       application_attempt attempt,
       int target_root_fd,
-      int journal_store_fd,
-      int checkpoint_store_fd,
       int payload_store_fd,
       int capture_store_fd,
       int rejected_store_fd,
       int completed_evidence_store_fd,
-      std::optional<application_journal_record> resumed = std::nullopt)
+      const application_restart_view* restart = nullptr)
       : configured_(std::move(configured)), request_(std::move(request)),
         lease_(&lease), lease_identity_(lease.identity()),
         incoming_image_(std::move(incoming_image)), attempt_(std::move(attempt)),
         target_root_(duplicate_directory(target_root_fd)),
         observer_(application_target_observer::from_directory_fd(target_root_.get())),
-        journal_store_(application_journal_store::from_directory_fd(journal_store_fd)),
-        checkpoint_store_(application_restart_checkpoint_store::from_directory_fd(
-            checkpoint_store_fd)),
         payload_store_(application_payload_store::from_directory_fd(payload_store_fd)),
         capture_store_(application_capture_store::from_directory_fds(
             capture_store_fd, target_root_.get())),
@@ -437,12 +406,11 @@ public:
         completed_store_(completed_application_evidence_store::from_directory_fd(
             completed_evidence_store_fd)),
         capture_plan_(capture_plan(request_)),
-        payload_plan_(payload_plan(request_, incoming_image_)),
-        resumed_(std::move(resumed))
+        payload_plan_(payload_plan(request_, incoming_image_))
   {
     durability_.fill(application_durability_status::not_attempted);
-    if (resumed_)
-      load_restart();
+    if (restart != nullptr)
+      load_restart(*restart);
   }
 
   [[nodiscard]] const mutation_backend_identity&
@@ -463,27 +431,6 @@ public:
   [[nodiscard]] const application_attempt_nonce&
   attempt_nonce() const noexcept override
   { return attempt_.nonce(); }
-
-  [[nodiscard]] std::optional<application_journal_record_identity>
-  resumed_journal() const noexcept override
-  {
-    return resumed_ ? std::optional<application_journal_record_identity>(
-                          resumed_->identity())
-                    : std::nullopt;
-  }
-
-  [[nodiscard]] application_restart_checkpoint restart_checkpoint(
-      const application_journal_record& journal) override
-  {
-    if (!resumed_ || !restart_checkpoint_ ||
-        resumed_->identity() != journal.identity())
-    {
-      throw_backend(posix_backend_error_code::restart_authority_mismatch,
-                    EINVAL,
-                    "transaction was not reopened from the supplied journal");
-    }
-    return *restart_checkpoint_;
-  }
 
   [[nodiscard]] backend_observation_batch observe(
       const std::vector<pkgplan::package_path>& paths) override
@@ -660,18 +607,16 @@ public:
     if (evidence.request() != request_.identity() ||
         evidence.plan() != request_.plan() ||
         evidence.attempt() != attempt_.identity() ||
-        evidence.target() != configured_.identity() ||
-        !current_journal_ ||
-        evidence.journal() != current_journal_->header().identity())
+        evidence.target() != configured_.identity())
     {
       throw std::invalid_argument(
           "completed evidence does not belong to this transaction");
     }
-    // A resumed application completes under a newly acquired outer lease and
-    // therefore a newly admitted state projection. The journal header retains
-    // the original process's projection, while the semantic engine validates
-    // the current restart projection. This backend has no authority for that
-    // current projection and must not compare it with the historical header.
+    // The semantic owner binds completed evidence to its journal and current
+    // lease-bound state projection. This mutation provider owns neither
+    // journal persistence nor semantic restart authority, so it validates only
+    // the request/plan/attempt/target mechanism binding before publishing the
+    // supplied owner-authored evidence unchanged.
     const auto identity = visit_request(request_, [&](const auto& value) {
       return completed_store_.publish(evidence, value);
     });
@@ -706,22 +651,8 @@ public:
         application_durability_status::confirmed;
     switch (domain) {
       case application_durability_domain::journal:
-        if (!current_journal_) {
-          status = application_durability_status::not_attempted;
-        } else {
-          try {
-            current_journal_ = journal_store_.publish(*current_journal_);
-          } catch (const journal_store_error& error) {
-            if (error.code() !=
-                    journal_store_error_code::snapshot_sync_failed &&
-                error.code() !=
-                    journal_store_error_code::directory_sync_failed) {
-              throw;
-            }
-            status = application_durability_status::unconfirmed;
-          }
-        }
-        break;
+        throw std::invalid_argument(
+            "journal durability is owned by the application journal store");
       case application_durability_domain::incoming_staging:
         if (!incoming_payload_result_) {
           status = application_durability_status::not_attempted;
@@ -801,39 +732,6 @@ public:
     return result;
   }
 
-  [[nodiscard]] application_journal_record publish_journal(
-      const application_journal_record& record) override
-  {
-    ensure_live_lease();
-    validate_journal(record);
-    if (!admitted_)
-      throw std::logic_error("journal publication lacks admitted observations");
-    if (admitted_->requested() != precondition_paths(request_))
-      throw std::logic_error(
-          "journal publication lacks the exact precondition observation closure");
-
-    application_restart_checkpoint checkpoint =
-        application_restart_checkpoint::make(
-            record.identity(), *admitted_, incoming_payload_result_, captures_,
-            rejected_effects_, active_effects_, recovery_effects_,
-            synchronizations_, make_durability(durability_), backend_evidence_,
-            completed_evidence_);
-    checkpoint = checkpoint_store_.publish(record, checkpoint);
-    application_journal_record published = journal_store_.publish(record);
-    current_journal_ = published;
-    restart_checkpoint_ = std::move(checkpoint);
-
-    if (terminal_cleanup_allowed(published.state()) && active_namespace_) {
-      for (const auto& capture : capture_plan_.requests()) {
-        if (!capture.for_recovery())
-          continue;
-        static_cast<void>(
-            active_namespace_->discard_recovery(capture.path()));
-      }
-    }
-    return published;
-  }
-
   void retain_sealed_payloads(
       const pkgimage::package_image& image,
       const pkgimage::entry_selection& selection,
@@ -901,44 +799,29 @@ private:
     }
   }
 
-  void validate_journal(const application_journal_record& record) const
+  void load_restart(const application_restart_view& restart)
   {
-    const auto& header = record.header();
-    if (header.request() != request_.identity() ||
-        header.plan() != request_.plan() ||
-        header.attempt().identity() != attempt_.identity() ||
-        header.target() != configured_.identity() ||
-        header.control() != request_.control().identity() ||
-        header.backend() != configured_.mutation_backend())
-    {
-      throw std::invalid_argument(
-          "journal snapshot does not belong to this POSIX transaction");
-    }
-  }
+    if (restart.attempt().identity() != attempt_.identity())
+      throw_backend(posix_backend_error_code::restart_authority_mismatch,
+                    EINVAL,
+                    "owner restart view names another physical attempt");
 
-  void load_restart()
-  {
-    const auto loaded = visit_request(request_, [&](const auto& value) {
-      return checkpoint_store_.load(*resumed_, value);
-    });
-    if (!loaded) {
-      throw_backend(posix_backend_error_code::restart_checkpoint_missing,
-                    ENOENT,
-                    "durable application journal has no restart checkpoint");
-    }
-    restart_checkpoint_ = *loaded;
-    current_journal_ = *resumed_;
-    admitted_ = loaded->admitted_observations();
-    incoming_payload_result_ = loaded->incoming_payload();
-    captures_ = loaded->captures();
-    rejected_effects_ = loaded->rejected_effects();
-    active_effects_ = loaded->active_effects();
-    recovery_effects_ = loaded->recovery_effects();
-    synchronizations_ = loaded->synchronizations();
-    completed_evidence_ = loaded->completed_evidence();
-    backend_evidence_ = loaded->backend_evidence();
-    for (const auto& fact : loaded->durability().facts())
+    admitted_ = restart.admitted_observations();
+    incoming_payload_result_ = restart.incoming_payload();
+    captures_ = restart.captures();
+    rejected_effects_ = restart.rejected_effects();
+    active_effects_ = restart.active_effects();
+    recovery_effects_ = restart.recovery_effects();
+    synchronizations_ = restart.synchronizations();
+    completed_evidence_ = restart.completed_evidence();
+    backend_evidence_ = restart.backend_evidence();
+    for (const auto& fact : restart.durability().facts())
       durability_[durability_index(fact.domain())] = fact.status();
+
+    if (admitted_->requested() != precondition_paths(request_))
+      throw_backend(posix_backend_error_code::restart_authority_mismatch,
+                    EINVAL,
+                    "owner restart observations do not match frozen preconditions");
 
     if (incoming_payload_result_ &&
         incoming_payload_result_->outcome() ==
@@ -947,50 +830,51 @@ private:
       if (!incoming_image_ || !payload_plan_)
         throw_backend(posix_backend_error_code::restart_authority_mismatch,
                       EINVAL,
-                      "checkpoint claims incoming payload without image authority");
+                      "restart view claims incoming payload without image authority");
       auto payloads = payload_store_.load(
           attempt_, *incoming_image_, payload_plan_->selection());
       if (!payloads)
         throw_backend(posix_backend_error_code::restart_authority_mismatch,
                       ENOENT,
-                      "checkpoint sealed payload authority is absent");
+                      "restart-view sealed payload authority is absent");
       sealed_payloads_ = std::move(*payloads);
     }
 
     for (const auto& capture : captures_) {
-      const auto* request = find_capture_request(
-          capture_plan_, capture.path());
+      if (capture.result().outcome() != backend_operation_outcome::completed)
+        continue;
+      const auto* request = find_capture_request(capture_plan_, capture.path());
       const auto* observed = admitted_observation(capture.path());
       if (request == nullptr || observed == nullptr)
         throw_backend(posix_backend_error_code::restart_authority_mismatch,
                       EINVAL,
-                      "checkpoint capture is absent from frozen authority");
+                      "restart-view capture is absent from frozen authority");
       auto object = capture_store_.load(attempt_, *request, *observed);
       if (!object ||
-          !same_observation(object->observation(),
-                            capture.result().captured()) ||
+          !same_observation(object->observation(), capture.result().captured()) ||
           object->exact_recovery_possible() !=
               capture.result().exact_recovery_possible())
       {
         throw_backend(posix_backend_error_code::restart_authority_mismatch,
                       ENOENT,
-                      "checkpoint capture cannot be revalidated");
+                      "restart-view capture cannot be revalidated");
       }
       captured_objects_.push_back(std::move(*object));
     }
 
     for (const auto& rejected : rejected_effects_) {
+      if (rejected.result().outcome() != backend_operation_outcome::completed)
+        continue;
       const auto request = rejected_request(request_, rejected.path());
       if (!request || !rejected.result().record())
         throw_backend(posix_backend_error_code::restart_authority_mismatch,
                       EINVAL,
-                      "checkpoint rejected effect is absent from frozen authority");
-      const auto object = rejected_store_.load(
-          attempt_, request_.plan(), *request);
+                      "restart-view rejected effect is absent from frozen authority");
+      const auto object = rejected_store_.load(attempt_, request_.plan(), *request);
       if (!object || object->identity() != *rejected.result().record())
         throw_backend(posix_backend_error_code::restart_authority_mismatch,
                       ENOENT,
-                      "checkpoint rejected object cannot be revalidated");
+                      "restart-view rejected object cannot be revalidated");
     }
 
     if (completed_evidence_) {
@@ -1000,7 +884,7 @@ private:
       if (!evidence || evidence->identity() != completed_evidence_->identity())
         throw_backend(posix_backend_error_code::restart_authority_mismatch,
                       ENOENT,
-                      "checkpoint completed evidence cannot be revalidated");
+                      "restart-view completed evidence cannot be revalidated");
     }
 
     if (!active_effects_.empty() || !recovery_effects_.empty())
@@ -1015,8 +899,6 @@ private:
   application_attempt attempt_;
   unique_fd target_root_;
   application_target_observer observer_;
-  application_journal_store journal_store_;
-  application_restart_checkpoint_store checkpoint_store_;
   application_payload_store payload_store_;
   application_capture_store capture_store_;
   application_rejected_object_store rejected_store_;
@@ -1036,9 +918,6 @@ private:
   std::array<application_durability_status, 6> durability_;
   std::vector<application_backend_evidence_identity> backend_evidence_;
   std::optional<completed_application_evidence> completed_evidence_;
-  std::optional<application_journal_record> resumed_;
-  std::optional<application_journal_record> current_journal_;
-  std::optional<application_restart_checkpoint> restart_checkpoint_;
 };
 
 tracked_payload_stage::tracked_payload_stage(
@@ -1078,16 +957,12 @@ class application_posix_backend::implementation final {
 public:
   implementation(application_target_context target,
                  int target_root_fd,
-                 int journal_store_fd,
-                 int checkpoint_store_fd,
                  int payload_store_fd,
                  int capture_store_fd,
                  int rejected_store_fd,
                  int completed_evidence_store_fd)
       : target(std::move(target)),
         target_root(duplicate_directory(target_root_fd)),
-        journal_store(duplicate_directory(journal_store_fd)),
-        checkpoint_store(duplicate_directory(checkpoint_store_fd)),
         payload_store(duplicate_directory(payload_store_fd)),
         capture_store(duplicate_directory(capture_store_fd)),
         rejected_store(duplicate_directory(rejected_store_fd)),
@@ -1098,8 +973,6 @@ public:
 
   application_target_context target;
   unique_fd target_root;
-  unique_fd journal_store;
-  unique_fd checkpoint_store;
   unique_fd payload_store;
   unique_fd capture_store;
   unique_fd rejected_store;
@@ -1125,8 +998,6 @@ std::unique_ptr<application_posix_backend>
 application_posix_backend::from_directory_fds(
     application_target_context target,
     int target_root_fd,
-    int journal_store_fd,
-    int checkpoint_store_fd,
     int payload_store_fd,
     int capture_store_fd,
     int rejected_store_fd,
@@ -1134,9 +1005,8 @@ application_posix_backend::from_directory_fds(
 {
   return std::unique_ptr<application_posix_backend>(
       new application_posix_backend(std::make_unique<implementation>(
-          std::move(target), target_root_fd, journal_store_fd,
-          checkpoint_store_fd, payload_store_fd, capture_store_fd,
-          rejected_store_fd, completed_evidence_store_fd)));
+          std::move(target), target_root_fd, payload_store_fd,
+          capture_store_fd, rejected_store_fd, completed_evidence_store_fd)));
 }
 
 application_posix_backend::application_posix_backend(
@@ -1169,8 +1039,7 @@ application_posix_backend::begin_with_incoming_image(
   return std::make_unique<posix_backend_transaction>(
       state_->target, request, lease,
       std::optional<pkgimage::package_image>(incoming_image),
-      std::move(attempt), state_->target_root.get(), state_->journal_store.get(),
-      state_->checkpoint_store.get(), state_->payload_store.get(),
+      std::move(attempt), state_->target_root.get(), state_->payload_store.get(),
       state_->capture_store.get(), state_->rejected_store.get(),
       state_->completed_evidence_store.get());
 }
@@ -1186,8 +1055,7 @@ application_posix_backend::begin_without_incoming_image(
       request.identity(), state_->target.identity(), identity(), random_nonce());
   return std::make_unique<posix_backend_transaction>(
       state_->target, request, lease, std::nullopt, std::move(attempt),
-      state_->target_root.get(), state_->journal_store.get(),
-      state_->checkpoint_store.get(), state_->payload_store.get(),
+      state_->target_root.get(), state_->payload_store.get(),
       state_->capture_store.get(), state_->rejected_store.get(),
       state_->completed_evidence_store.get());
 }
@@ -1196,38 +1064,34 @@ std::unique_ptr<application_backend_transaction>
 application_posix_backend::resume_with_incoming_image(
     const package_application_request& request,
     target_mutation_lease& lease,
-    const application_journal_record& journal,
+    const application_restart_view& restart,
     const pkgimage::package_image& incoming_image)
 {
   validate_backend_binding(state_->target, request, lease);
   validate_incoming_binding(request, incoming_image);
-  validate_restart_journal(state_->target, request, journal);
+  validate_restart_view(state_->target, request, restart);
   return std::make_unique<posix_backend_transaction>(
       state_->target, request, lease,
       std::optional<pkgimage::package_image>(incoming_image),
-      journal.header().attempt(), state_->target_root.get(),
-      state_->journal_store.get(), state_->checkpoint_store.get(),
-      state_->payload_store.get(), state_->capture_store.get(),
-      state_->rejected_store.get(), state_->completed_evidence_store.get(),
-      journal);
+      restart.attempt(), state_->target_root.get(), state_->payload_store.get(),
+      state_->capture_store.get(), state_->rejected_store.get(),
+      state_->completed_evidence_store.get(), &restart);
 }
 
 std::unique_ptr<application_backend_transaction>
 application_posix_backend::resume_without_incoming_image(
     const package_application_request& request,
     target_mutation_lease& lease,
-    const application_journal_record& journal)
+    const application_restart_view& restart)
 {
   validate_backend_binding(state_->target, request, lease);
   validate_without_incoming(request);
-  validate_restart_journal(state_->target, request, journal);
+  validate_restart_view(state_->target, request, restart);
   return std::make_unique<posix_backend_transaction>(
       state_->target, request, lease, std::nullopt,
-      journal.header().attempt(), state_->target_root.get(),
-      state_->journal_store.get(), state_->checkpoint_store.get(),
-      state_->payload_store.get(), state_->capture_store.get(),
-      state_->rejected_store.get(), state_->completed_evidence_store.get(),
-      journal);
+      restart.attempt(), state_->target_root.get(), state_->payload_store.get(),
+      state_->capture_store.get(), state_->rejected_store.get(),
+      state_->completed_evidence_store.get(), &restart);
 }
 
 } // namespace pkgapply::posix

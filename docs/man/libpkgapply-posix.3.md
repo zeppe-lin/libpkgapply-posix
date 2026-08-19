@@ -1,155 +1,122 @@
-% LIBPKGAPPLY-POSIX(3) libpkgapply-posix | Version 3.2.3
+% LIBPKGAPPLY-POSIX(3) libpkgapply-posix | Version 4.0.0
 
 
 # NAME
 
-libpkgapply-posix - descriptor-anchored POSIX application backend
+libpkgapply-posix - descriptor-anchored POSIX application mechanisms
 
 # SYNOPSIS
 
 ```
 #include <libpkgapply-posix/libpkgapply-posix.h>
 
-auto lease = pkgapply::posix::target_mutation_lease::acquire(
-    target,
-    lock_directory_fd);
+auto journal = pkgapply::posix::application_journal_store::open(
+    journal_directory);
 
 auto backend =
     pkgapply::posix::application_posix_backend::from_directory_fds(
         target,
         target_root_fd,
-        journal_store_fd,
-        checkpoint_store_fd,
         payload_store_fd,
         capture_store_fd,
         rejected_store_fd,
         completed_evidence_store_fd);
+
+auto receipt = pkgapply::apply(
+    request, state, lease, *backend, *journal, archive);
 ```
 
 # DESCRIPTION
 
-**libpkgapply-posix** is the reference POSIX mechanism library for
-**libpkgapply**. Its installed **application_posix_backend** composes the complete
-abstract backend contract while keeping the mutable transaction private.
+**libpkgapply-posix** provides the reference POSIX mechanisms for
+**libpkgapply**. The mutation backend and application journal store are separate
+objects. The backend owns physical observation, staging, capture, mutation,
+recovery and evidence stores. The journal store owns only exact-name durable
+publication of canonical bytes encoded by **libpkgapply**.
 
-The factory accepts already-selected open directory descriptors. It duplicates
-each descriptor with close-on-exec semantics and retains no pathname. Renaming
-or replacing a pathname after construction cannot redirect the backend to
-another target or storage namespace.
+Caller-selected directory descriptors are duplicated and retained. Replacing a
+pathname after construction cannot redirect a live backend or journal store.
+The provider does not discover target identity, package plans, leases, storage
+locations, or package-manager policy from ambient state.
 
-The supplied target context remains the semantic identity authority. The
-factory does not discover target identities, storage locations, archives,
-plans, leases, or package-manager configuration from ambient state.
+# JOURNAL STORE
+
+**application_journal_store** implements the core append-only storage interface.
+It persists one immutable declaration, immutable sequence-addressed steps, and
+one bounded cursor per declaration. It also maintains a direct mutable
+request-to-declaration locator used only for restart routing.
+
+Declarations and steps are synchronized and published without replacement.
+Publishing different bytes under an occupied immutable address fails.
+Cursor replacement is serialized across processes with an advisory lock and is
+performed as compare-and-publish followed by atomic replacement and directory
+synchronization. Exact retry of an already-visible desired cursor is idempotent.
+
+The store performs exact-name lookup only. It does not enumerate journal
+directories to discover history and has no complete-journal or restart-checkpoint
+format.
 
 # TARGET MUTATION LEASE
 
-**target_mutation_lease::acquire()** duplicates one caller-selected lock-directory
-descriptor and opens a coordination file derived from the target context's
-mutation-exclusion-domain identity. The final component is not followed when it
-is a symbolic link. Acquisition uses a nonblocking exclusive advisory lock;
-a competing live holder is reported as **lock_busy**. Waiting and retry remain
-caller policy.
+**target_mutation_lease::acquire()** binds one caller-selected lock directory,
+target context and mutation-exclusion domain. Acquisition is nonblocking; a
+competing live holder is reported as **lock_busy**. The caller retains the lease
+through application/state publication/finalization according to controller
+policy.
 
-Each successful acquisition receives one mechanism-issued nonce and one
-canonical acquisition identity binding that nonce to the exact target context
-and exclusion domain. The caller retains the object through application,
-installed-state publication, and finalization or recovery. The coordination
-file is never removed. If its directory entry is unlinked or replaced,
-**held()** returns false.
+# BACKEND DESCRIPTORS
 
-Lease acquisition does not read installed state, observe target paths, create
-an application transaction, invoke a backend, or mutate the managed target.
-The caller must acquire this outer lease before any narrower state-publication
-lock.
-
-# DESCRIPTORS
-
-The descriptor arguments identify, in order:
+**application_posix_backend::from_directory_fds()** accepts, in order:
 
 - managed target root;
-- application journal store;
-- immutable restart-checkpoint store;
 - private incoming-payload store;
 - private old-object capture store;
 - immutable rejected-object store; and
 - immutable completed-evidence store.
 
-All descriptors must be live directories. The backend duplicates them before
-returning. The caller may close its originals after successful construction.
+Journal persistence is not a backend descriptor. The separate journal store is
+passed directly to **pkgapply::apply()** and **pkgapply::resume_application()**.
 
-# TRANSACTIONS
+# RESTART
 
-A fresh installation or upgrade transaction binds the exact immutable
-application request, caller-held lease, accepted incoming package image, target
-context, and one unpredictable attempt nonce. A fresh removal transaction binds
-no incoming image authority. Construction performs no observation, staging,
-journal publication, capture, mutation, synchronization, or evidence
-publication.
+A controller resumes by retaining or resolving the exact journal declaration
+identity, acquiring a current lease/state projection, and calling
+**pkgapply::resume_application()** with the backend and journal store.
 
-A resumed transaction accepts the exact durable journal supplied by the caller,
-retains its original attempt nonce, and loads only the checkpoint keyed by that
-journal-record identity. It revalidates checkpoint claims against sealed
-payloads, captures, rejected records, active target/workspace facts, durability
-facts, and completed evidence. Missing or contradictory authority is a typed
-restart failure, not permission to repeat unresolved mutation.
+**libpkgapply** validates declaration, immutable step chain and cursor before it
+constructs an ephemeral **application_restart_view**. The POSIX backend uses
+that view to revalidate only subordinate physical payload, capture, rejected,
+active/recovery, durability and completed-evidence facts. It cannot publish a
+missing semantic terminal result from provider residue.
 
-If that checkpoint retains completed evidence from the original process, a
-restart admitted under a new lease-bound state projection may publish another
-immutable completed-evidence record for the same request, attempt, and journal
-authority. The historical record is preserved. After the rebound record is
-synchronized, a later checkpoint may retain it as the current completed-evidence
-authority for receipt sealing.
-
-The journal store also retains one direct active-journal index per exact
-application-request identity. **load_active()** follows only that index and then
-validates the named journal against the request. It does not scan journals,
-select a newest attempt, or reconstruct caller policy from storage order. The
-index is replaced only after the referenced journal snapshot is durable.
-
-The rejected-object store likewise retains a direct index keyed by canonical
-rejected-object record identity. **load_identified()** follows only that identity
-and returns self-contained immutable evidence after validating the record and any
-regular payload. It does not scan rejected storage, depend on the application
-journal, or reconstruct a planner command. Request-bound application restart
-continues to use the stricter rejected-store **load()** operation.
+The direct **load_active_declaration()** locator follows one exact request index
+and validates the referenced declaration/request binding. It does not select a
+newest attempt by scanning storage.
 
 # DURABILITY
 
-The six application durability domains route independently:
-
-- journal to the journal store;
-- incoming staging to the payload store;
-- recovery staging to the capture store;
-- active namespace to changed target objects and parent directories;
-- rejected object store to the rejected namespace; and
-- completed evidence to the completed-evidence store.
-
-Before a journal snapshot can reference new restart facts, the exact immutable
-checkpoint for that snapshot is published first. An unreferenced checkpoint is
-harmless; a visible resumable journal without its replay material is forbidden.
+Journal durability is established by successful journal-store publication.
+**application_backend_transaction::synchronize(journal)** is rejected.
+Incoming staging, recovery staging, active namespace, rejected storage and
+completed-evidence durability remain physical backend domains.
 
 # ERRORS
 
-**target_mutation_lease_error** reports invalid lock-directory authority,
-lock open or type failure, a competing holder, lock replacement, and nonce
-failure.
+**journal_store_error** distinguishes directory/value I/O, corruption,
+immutable conflicts, stale cursor conflicts, index corruption and cursor-lock
+failure. **publication_visible()** reports failures after candidate bytes may
+already have become visible, allowing exact idempotent retry.
 
-**posix_backend_error** reports configuration and restart binding failures.
-Codes distinguish invalid descriptors, descriptor-duplication failure, target
-context mismatch, lease mismatch, wrong request form, incoming image mismatch,
-nonce generation failure, missing checkpoint, and contradictory restart
-authority.
-
-Mechanism-specific errors from observation, payload, capture, rejected,
-active, journal, checkpoint, or completed-evidence stores retain their own typed
-error domains.
+**posix_backend_error** reports invalid descriptors, target/lease/request/image
+binding failures, nonce generation failure and contradictory owner-derived
+restart authority. Other mechanisms retain their own typed error domains.
 
 # CLEANUP
 
-Transaction destruction closes descriptors and abandons only incomplete private
-construction. It does not delete durable journals, checkpoints, captures,
-rejected records, completed evidence, or unresolved recovery workspace.
-Displaced old objects are discarded only after a terminal journal is durable.
+Transaction destruction closes live descriptors and abandons incomplete private
+construction. Durable owner journal steps and subordinate evidence are not
+deleted merely because current filesystem residue appears unused. Garbage
+collection requires explicit higher-level authority.
 
 # SEE ALSO
 

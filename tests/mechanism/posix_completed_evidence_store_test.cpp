@@ -3,7 +3,7 @@
 
 #include "nonblocking_refusal.h"
 
-#include "checkpoint_test_fixture.h"
+#include "application_test_fixture.h"
 
 #include <libpkgapply-posix/completed_evidence_store.h>
 
@@ -144,15 +144,11 @@ void corrupt_same_length(const std::string& path)
 
 int main()
 {
-  using namespace pkgapply::test::checkpoint_fixture;
+  using namespace pkgapply::test::application_fixture;
 
-  const auto request = pkgapply::test::checkpoint_fixture::request();
-  const auto journal = pkgapply::test::checkpoint_fixture::journal(request);
-  const auto checkpoint =
-      pkgapply::test::checkpoint_fixture::checkpoint(request, journal);
-  require(checkpoint.completed_evidence().has_value(),
-          "checkpoint fixture has no completed evidence");
-  const auto evidence = *checkpoint.completed_evidence();
+  const auto request = pkgapply::test::application_fixture::request();
+  const auto header = journal_header(request);
+  const auto evidence = completed_evidence(request, header);
 
   const auto encoding =
       pkgapply::encode_completed_application_evidence(evidence);
@@ -180,7 +176,7 @@ int main()
           "completed-evidence codec accepted same-length corruption");
 
   const auto foreign_request =
-      pkgapply::test::checkpoint_fixture::request("foreign");
+      pkgapply::test::application_fixture::request("foreign");
   rejected = false;
   try {
     static_cast<void>(pkgapply::decode_completed_application_evidence(

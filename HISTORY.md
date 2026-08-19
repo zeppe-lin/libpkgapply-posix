@@ -1,5 +1,13 @@
 # History
 
+## 4.0.0
+
+- Removed the provider-owned restart-checkpoint store and complete-journal snapshot persistence. The POSIX provider now has one separate `application_journal_store` implementing the libpkgapply generation-4 declaration/immutable-step/bounded-cursor storage interface.
+- Made the mutation backend physically independent of semantic journal persistence: backend construction no longer accepts journal/checkpoint descriptors, backend transactions reject the journal synchronization domain, and restart consumes only the owner-derived ephemeral `application_restart_view`.
+- Persist canonical journal bytes exclusively through libpkgapply's owner transport codec. Immutable declaration/step publication is no-replace; cursor compare-and-publish is serialized across processes and supports exact idempotent retry after uncertain directory durability.
+- Added direct request-to-declaration restart routing without directory scans, immutable conflict/stale-CAS/corruption/FIFO attacks, constrained-`RLIMIT_NOFILE` stress, and exact byte accounting that rejects any hidden snapshot/checkpoint history.
+- Advanced the provider ABI to `libpkgapply-posix.so.3`, API generation 3, and bound the public closure to `libpkgapply >= 4.0.0, < 5.0.0`. No generation-2 compatibility adapter is retained.
+
 ## 3.2.3
 
 - Bound active-namespace durability descriptor retention by touched filesystem

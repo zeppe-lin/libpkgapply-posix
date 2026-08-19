@@ -15,8 +15,8 @@ fi
 
 grep -F "subdir('src')" "$root/meson.build" >/dev/null || \
   fail 'library body not explicit'
-grep -F "version: ['>=3.0.1', '<4.0.0']" "$root/meson.build" >/dev/null || \
-  fail 'apply ABI-3 source-4 closure is absent'
+grep -F "version: ['>=4.0.0', '<5.0.0']" "$root/meson.build" >/dev/null || \
+  fail 'apply ABI-4 append-only closure is absent'
 grep -F "version: '>=0.4.0'" "$root/meson.build" >/dev/null || \
   fail 'image 0.4 floor absent'
 grep -F "version: '>=0.3.0'" "$root/meson.build" >/dev/null || \
@@ -47,3 +47,28 @@ grep -F 'catch (const std::invalid_argument&)' \
 grep -F 'private capture record contains invalid canonical values' \
   "$root/src/capture_store.cpp" >/dev/null ||
   fail 'capture-record canonical failure translation is absent'
+
+# Generation 4 has one owner-authored semantic spine. The mutation backend may
+# not retain the retired complete-journal/checkpoint publication vocabulary.
+if grep -R -E 'application_restart_checkpoint|checkpoint_store|publish_journal|resumed_journal' \
+  "$root/include" "$root/src" >/dev/null; then
+  fail 'retired semantic checkpoint or complete-journal authority remains'
+fi
+grep -F 'public ::pkgapply::application_journal_store' \
+  "$root/include/libpkgapply-posix/journal_store.h" >/dev/null ||
+  fail 'POSIX journal store does not implement the owner storage interface'
+grep -F 'encode_application_journal_declaration' "$root/src/journal_store.cpp" >/dev/null ||
+  fail 'journal store does not use owner declaration encoding'
+grep -F 'encode_application_journal_step' "$root/src/journal_store.cpp" >/dev/null ||
+  fail 'journal store does not use owner step encoding'
+grep -F 'encode_application_journal_cursor' "$root/src/journal_store.cpp" >/dev/null ||
+  fail 'journal store does not use owner cursor encoding'
+if grep -F 'encode_application_journal(' "$root/src/journal_store.cpp" >/dev/null; then
+  fail 'journal store retained complete-snapshot encoding'
+fi
+if grep -E 'readdir|fdopendir|opendir|scandir|directory_iterator' \
+  "$root/src/journal_store.cpp" >/dev/null; then
+  fail 'journal store enumerates storage to discover authority'
+fi
+grep -F 'F_SETLKW' "$root/src/journal_store.cpp" >/dev/null ||
+  fail 'cursor compare-and-publish lacks cross-process serialization'

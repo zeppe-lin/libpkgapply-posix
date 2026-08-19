@@ -30,7 +30,7 @@ for script in "$root"/ci/*.sh "$root"/tests/contracts/*.sh; do
   sh -n "$script" || fail "invalid shell: ${script#"$root"/}"
 done
 for token in \
-  v3.0.1 v3.1.0 v1.0.1 v1.1.0 v0.4.1 v0.3.1 \
+  v4.0.0 v3.1.0 v1.0.1 v1.1.0 v0.4.1 v0.3.1 \
   'GCC shared' 'GCC static' 'Clang shared' 'Clang static' \
   'GCC release' 'address,undefined' 'meson==1.10.2'
 do
@@ -47,7 +47,7 @@ for dependency in \
   'libpkgresolve v4.0.0' \
   'libpkgsource-plan v2.0.0' \
   'libpkgbuild-image v1.0.1' \
-  'libpkgapply v3.0.1'
+  'libpkgapply v4.0.0'
 do
   repository=${dependency% *}
   reference=${dependency#* }
@@ -72,7 +72,7 @@ do
 done
 
 
-grep -F 'libpkgapply.so.3' "$root/ci/audit-shared-boundary.sh" >/dev/null ||
+grep -F 'libpkgapply.so.4' "$root/ci/audit-shared-boundary.sh" >/dev/null ||
   fail 'shared audit omits the semantic core SONAME'
 grep -F 'libpkgplan.so.1' "$root/ci/audit-shared-boundary.sh" >/dev/null ||
   fail 'shared audit omits the direct planner mechanism edge'
@@ -83,6 +83,9 @@ grep -F 'application_target_observer::open' \
 grep -F 'application_rejected_object_store::open' \
   "$root/ci/installed-consumer.cpp" >/dev/null ||
   fail 'installed consumer does not pull the private store closure'
+grep -F 'application_journal_store::open' \
+  "$root/ci/installed-consumer.cpp" >/dev/null ||
+  fail 'installed consumer does not exercise the separate journal store'
 if grep -E '&pkgapply::posix::[A-Za-z_][A-Za-z0-9_]*' \
   "$root/ci/installed-consumer.cpp" >/dev/null
 then

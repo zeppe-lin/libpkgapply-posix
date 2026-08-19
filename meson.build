@@ -4,7 +4,7 @@
 project(
   'libpkgapply-posix',
   'cpp',
-  version: '3.2.3',
+  version: '4.0.0',
   license: 'GPL-3.0-or-later',
   meson_version: '>=1.2.0',
   default_options: [
@@ -26,7 +26,7 @@ endif
 
 libpkgapply_dep = dependency(
   'libpkgapply',
-  version: ['>=3.0.1', '<4.0.0'],
+  version: ['>=4.0.0', '<5.0.0'],
   required: true,
   static: want_static,
 )

@@ -23,7 +23,7 @@ surface_test=$root/tests/contracts/check_abi_surface.sh
 [ -x "$generator" ] || fail 'ELF export-script generator is absent'
 [ -x "$surface_test" ] || fail 'dynamic ABI surface audit is absent'
 
-grep -F "soversion: '2'" "$root/src/meson.build" >/dev/null ||
+grep -F "soversion: '3'" "$root/src/meson.build" >/dev/null ||
   fail 'SONAME generation changed'
 grep -F "gnu_symbol_visibility: 'hidden'" "$root/src/meson.build" >/dev/null ||
   fail 'hidden visibility is absent'
@@ -64,7 +64,7 @@ for stem in \
   N8pkgapply5posix20rejected_store_errorE \
   N8pkgapply5posix21target_mutation_leaseE \
   N8pkgapply5posix21target_observer_errorE \
-  N8pkgapply5posix22checkpoint_store_errorE \
+  N8pkgapply5posix25application_journal_storeE \
   N8pkgapply5posix25application_payload_stageE \
   N8pkgapply5posix25application_posix_backendE \
   N8pkgapply5posix27target_mutation_lease_errorE \
@@ -89,7 +89,6 @@ for type in \
   target_mutation_lease_error \
   posix_backend_error \
   capture_store_error \
-  checkpoint_store_error \
   rejected_store_error \
   journal_store_error \
   completed_evidence_store_error \

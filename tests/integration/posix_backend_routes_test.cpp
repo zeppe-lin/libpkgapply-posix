@@ -4,6 +4,7 @@
 #include "plan_fixture.h"
 
 #include <libpkgapply-posix/backend.h>
+#include <libpkgapply-posix/journal_store.h>
 #include <libpkgapply-posix/rejected_store.h>
 #include <libpkgapply-posix/target_observer.h>
 #include <libpkgapply/apply.h>
@@ -339,17 +340,17 @@ public:
     for (const auto& name : store_names_)
       make_directory(root_.path() + "/" + std::string(name));
 
-    std::array<int, 7> descriptors = {
+    journal_store_ =
+        pkgapply::posix::application_journal_store::open(store("journal"));
+    std::array<int, 5> descriptors = {
         open_directory(target_path_),
-        open_directory(store("journal")),
-        open_directory(store("checkpoint")),
         open_directory(store("payload")),
         open_directory(store("capture")),
         open_directory(store("rejected")),
         open_directory(store("completed"))};
     backend_ = pkgapply::posix::application_posix_backend::from_directory_fds(
         target_, descriptors[0], descriptors[1], descriptors[2], descriptors[3],
-        descriptors[4], descriptors[5], descriptors[6]);
+        descriptors[4]);
     for (int descriptor : descriptors)
       require(::close(descriptor) == 0,
               "cannot close backend route-test caller descriptor");
@@ -359,17 +360,20 @@ public:
   { return target_; }
   [[nodiscard]] pkgapply::posix::application_posix_backend& backend() const
   { return *backend_; }
+  [[nodiscard]] pkgapply::posix::application_journal_store& journal_store() const
+  { return *journal_store_; }
   [[nodiscard]] const std::string& target_path() const noexcept
   { return target_path_; }
   [[nodiscard]] std::string store(std::string_view name) const
   { return root_.path() + "/" + std::string(name); }
 
 private:
-  static constexpr std::array<std::string_view, 6> store_names_ = {
-      "journal", "checkpoint", "payload", "capture", "rejected", "completed"};
+  static constexpr std::array<std::string_view, 5> store_names_ = {
+      "journal", "payload", "capture", "rejected", "completed"};
   temporary_directory root_;
   pkgapply::application_target_context target_;
   std::string target_path_;
+  std::unique_ptr<pkgapply::posix::application_journal_store> journal_store_;
   std::unique_ptr<pkgapply::posix::application_posix_backend> backend_;
 };
 
@@ -414,7 +418,7 @@ void test_regular_install()
   const auto state = state_projection(lease, plan.preconditions(), 81);
 
   const auto receipt = pkgapply::apply(
-      request, state, lease, layout.backend(), archive);
+      request, state, lease, layout.backend(), layout.journal_store(), archive);
   require(receipt.outcome() == pkgapply::application_attempt_outcome::completed,
           "POSIX backend did not complete regular installation");
   require(read_file(layout.target_path() + "/tool") == bytes,
@@ -465,7 +469,7 @@ void test_nested_install_finalizes_directory_metadata()
   const auto state = state_projection(lease, plan.preconditions(), 106);
 
   const auto receipt = pkgapply::apply(
-      request, state, lease, layout.backend(), archive);
+      request, state, lease, layout.backend(), layout.journal_store(), archive);
   require(receipt.outcome() == pkgapply::application_attempt_outcome::completed,
           "POSIX backend did not complete nested installation");
   require(read_file(layout.target_path() + "/usr/bin/tool") == bytes,
@@ -516,7 +520,7 @@ void test_incoming_rejected_stage()
   const auto state = state_projection(lease, plan.preconditions(), 111);
 
   const auto receipt = pkgapply::apply(
-      request, state, lease, layout.backend(), archive);
+      request, state, lease, layout.backend(), layout.journal_store(), archive);
   require(receipt.outcome() == pkgapply::application_attempt_outcome::completed,
           "POSIX backend did not complete rejected incoming application");
   struct stat status {};
@@ -598,7 +602,7 @@ void test_regular_removal_with_capture()
   const auto state = state_projection(lease, plan.preconditions(), 141);
 
   const auto receipt = pkgapply::apply(
-      request, state, lease, layout.backend());
+      request, state, lease, layout.backend(), layout.journal_store());
   require(receipt.outcome() == pkgapply::application_attempt_outcome::completed,
           "POSIX backend did not complete regular removal");
   struct stat status {};
@@ -678,7 +682,7 @@ void test_nested_removal_completes_after_descendant_mutation()
   const auto state = state_projection(lease, plan.preconditions(), 171);
 
   const auto receipt = pkgapply::apply(
-      request, state, lease, layout.backend());
+      request, state, lease, layout.backend(), layout.journal_store());
   require(receipt.outcome() == pkgapply::application_attempt_outcome::completed,
           "POSIX backend did not complete nested removal");
   struct stat status {};

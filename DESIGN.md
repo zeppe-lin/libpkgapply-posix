@@ -6,20 +6,28 @@
 engine in `libpkgapply`.
 
 ```text
-libpkgapply request, plan, journal, and recovery authority
+libpkgapply request / declaration / immutable steps / cursor
+                         |
+              canonical owner transport bytes
                          |
                          v
-                 libpkgapply-posix
-   descriptor-anchored observation, private staging, durable stores,
-       target mutation leases, and concrete backend transactions
+               libpkgapply-posix journal store
+                         |
+             exact-name POSIX persistence
+
+libpkgapply semantic effect selection
                          |
                          v
-             caller-selected POSIX directories and target root
+               libpkgapply-posix backend
+    observation / staging / capture / mutation / recovery
+                         |
+                         v
+             caller-selected POSIX authorities
 ```
 
-The repository does not decide what package operation is valid, construct an
-operation plan, publish installed state, run lifecycle programs, or select host
-paths. Those remain caller or semantic-owner responsibilities.
+The journal store and mutation backend may live in the same package, but they
+are separate objects with separate authority. The mutation transaction cannot
+publish semantic history or synchronize the journal domain.
 
 ## Owned mechanisms
 
@@ -30,18 +38,32 @@ The library owns:
 - attempt-bound incoming payload staging;
 - pre-mutation old-object capture;
 - immutable rejected-object publication and direct record-identity reopening;
-- atomic journal and restart-checkpoint stores;
 - immutable completed-evidence publication;
-- active namespace mutation and recovery; and
-- composition of those mechanisms as `application_posix_backend`.
+- active namespace mutation and recovery;
+- descriptor-anchored exact-name journal byte persistence; and
+- composition of physical mechanisms as `application_posix_backend`.
 
-Every pathname-taking factory selects and opens authority once. Long-lived
-objects retain duplicated descriptors so later pathname replacement cannot
-redirect an admitted transaction.
+The journal mechanism provides immutable declaration/step publication, a
+cross-process serialized compare-and-publish cursor, and a direct mutable
+request-to-declaration locator. The locator is restart routing metadata, not
+semantic history.
 
 ## Non-ownership
 
-The library does not own semantic identities received from `libpkgapply`,
-`libpkgplan`, or `libpkgimage`. It validates bindings before acting but does not
-redefine them. OpenSSL is a private provider used for hashing and nonce
-material; no OpenSSL type appears in the installed API.
+The library does not own semantic identities or journal wire formats received
+from `libpkgapply`, `libpkgplan`, or `libpkgimage`. Journal values are encoded
+and decoded only by `libpkgapply`'s canonical transport codec. POSIX storage
+validates exact addressing and physical file properties around those bytes.
+
+There is no provider-owned restart-checkpoint aggregate or codec. On restart,
+`libpkgapply` rehydrates owner history and passes an ephemeral
+`application_restart_view`; the backend uses that view only to reopen and
+revalidate subordinate payload, capture, rejected, active/recovery, durability,
+and completed-evidence mechanisms.
+
+Every pathname-taking factory selects and opens authority once. Long-lived
+objects retain duplicated descriptors so pathname replacement cannot redirect
+an admitted store or transaction.
+
+OpenSSL is a private provider used for hashing and nonce material. No OpenSSL
+type appears in the installed API.

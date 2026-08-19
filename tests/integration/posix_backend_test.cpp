@@ -4,6 +4,8 @@
 #include "plan_fixture.h"
 
 #include <libpkgapply-posix/backend.h>
+#include <libpkgapply-posix/journal_store.h>
+#include <libpkgapply-posix/mutation_lease.h>
 #include <libpkgapply/apply.h>
 #include <libpkgapply/restart.h>
 
@@ -12,6 +14,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
+#include <filesystem>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -137,6 +140,113 @@ private:
   pkgimage::archive_inspection_receipt receipt_;
 };
 
+
+class interrupt_before_active_transaction final
+    : public pkgapply::application_backend_transaction {
+public:
+  interrupt_before_active_transaction(
+      std::unique_ptr<pkgapply::application_backend_transaction> delegate,
+      bool& interrupted)
+      : delegate_(std::move(delegate)), interrupted_(interrupted)
+  {
+  }
+
+  const pkgapply::mutation_backend_identity&
+  backend() const noexcept override { return delegate_->backend(); }
+  const pkgapply::observation_backend_identity&
+  observation_backend() const noexcept override
+  { return delegate_->observation_backend(); }
+  const pkgapply::execution_capability_profile_identity&
+  capabilities() const noexcept override { return delegate_->capabilities(); }
+  const pkgapply::application_target_context_identity&
+  target() const noexcept override { return delegate_->target(); }
+  const pkgapply::mutation_lease_instance_identity&
+  lease() const noexcept override { return delegate_->lease(); }
+  const pkgapply::application_attempt_nonce&
+  attempt_nonce() const noexcept override { return delegate_->attempt_nonce(); }
+
+  pkgapply::backend_observation_batch observe(
+      const std::vector<pkgplan::package_path>& paths) override
+  { return delegate_->observe(paths); }
+
+  std::unique_ptr<pkgapply::incoming_payload_stage> begin_payload_stage(
+      const pkgimage::package_image& image,
+      const pkgimage::entry_selection& selection) override
+  { return delegate_->begin_payload_stage(image, selection); }
+
+  pkgapply::old_object_capture_result capture_old(
+      const pkgapply::old_object_capture_request& request) override
+  { return delegate_->capture_old(request); }
+
+  pkgapply::backend_operation_result execute_active(
+      const pkgapply::backend_active_effect_request&) override
+  {
+    interrupted_ = true;
+    throw std::runtime_error("injected POSIX active interruption");
+  }
+
+  pkgapply::rejected_object_publication_result execute_rejected(
+      const pkgapply::backend_rejected_effect_request& request) override
+  { return delegate_->execute_rejected(request); }
+
+  pkgapply::completed_evidence_publication_result publish_completed_evidence(
+      const pkgapply::completed_application_evidence& evidence) override
+  { return delegate_->publish_completed_evidence(evidence); }
+
+  pkgapply::backend_operation_result recover(
+      const pkgplan::package_path& path) override
+  { return delegate_->recover(path); }
+
+  pkgapply::application_durability_fact synchronize(
+      pkgapply::application_durability_domain domain) override
+  { return delegate_->synchronize(domain); }
+
+private:
+  std::unique_ptr<pkgapply::application_backend_transaction> delegate_;
+  bool& interrupted_;
+};
+
+class interrupt_before_active_backend final : public pkgapply::application_backend {
+public:
+  interrupt_before_active_backend(pkgapply::application_backend& delegate,
+                                  bool& interrupted)
+      : delegate_(delegate), interrupted_(interrupted)
+  {
+  }
+
+  const pkgapply::mutation_backend_identity& identity() const noexcept override
+  { return delegate_.identity(); }
+  const pkgapply::observation_backend_identity&
+  observation_identity() const noexcept override
+  { return delegate_.observation_identity(); }
+  const pkgapply::execution_capability_profile_identity&
+  capabilities() const noexcept override { return delegate_.capabilities(); }
+
+  std::unique_ptr<pkgapply::application_backend_transaction>
+  begin_with_incoming_image(
+      const pkgapply::package_application_request& request,
+      pkgapply::target_mutation_lease& lease,
+      const pkgimage::package_image& incoming_image) override
+  {
+    return std::make_unique<interrupt_before_active_transaction>(
+        delegate_.begin_with_incoming_image(request, lease, incoming_image),
+        interrupted_);
+  }
+
+  std::unique_ptr<pkgapply::application_backend_transaction>
+  begin_without_incoming_image(
+      const pkgapply::package_application_request& request,
+      pkgapply::target_mutation_lease& lease) override
+  {
+    return std::make_unique<interrupt_before_active_transaction>(
+        delegate_.begin_without_incoming_image(request, lease), interrupted_);
+  }
+
+private:
+  pkgapply::application_backend& delegate_;
+  bool& interrupted_;
+};
+
 pkgapply::application_target_context target_context()
 {
   return pkgapply::application_target_context::make(
@@ -164,7 +274,7 @@ pkgapply::application_execution_control execution_control()
 }
 
 pkgapply::lease_bound_state_projection state_projection(
-    const fake_lease& lease,
+    const pkgapply::target_mutation_lease& lease,
     const pkgplan::operation_preconditions& preconditions)
 {
   std::vector<pkgapply::projected_path_owners> paths;
@@ -176,20 +286,6 @@ pkgapply::lease_bound_state_projection state_projection(
       pkgapply::state_projection_completeness::complete,
       std::move(paths),
       application_identity<pkgapply::state_projection_evidence_identity>(30));
-}
-
-pkgapply::application_durability_profile confirmed_durability()
-{
-  using D = pkgapply::application_durability_domain;
-  using S = pkgapply::application_durability_status;
-  return pkgapply::application_durability_profile({
-      {D::journal, S::confirmed},
-      {D::incoming_staging, S::confirmed},
-      {D::recovery_staging, S::confirmed},
-      {D::active_namespace, S::confirmed},
-      {D::rejected_object_store, S::confirmed},
-      {D::completed_evidence, S::confirmed},
-  });
 }
 
 std::size_t visible_entries(const std::string& path)
@@ -212,16 +308,15 @@ int main()
   temporary_directory root;
   const std::string target_path = root.path() + "/target";
   const std::string moved_target = root.path() + "/target-selected";
-  const std::array<std::string, 6> store_names = {
-      "journal", "checkpoint", "payload", "capture", "rejected", "completed"};
+  const std::array<std::string, 5> store_names = {
+      "journal", "payload", "capture", "rejected", "completed"};
   make_directory(target_path);
+  make_directory(root.path() + "/locks");
   for (const auto& name : store_names)
     make_directory(root.path() + "/" + name);
 
   {
-    std::array<int, 6> store_descriptors = {
-        open_directory(root.path() + "/journal"),
-        open_directory(root.path() + "/checkpoint"),
+    std::array<int, 4> store_descriptors = {
         open_directory(root.path() + "/payload"),
         open_directory(root.path() + "/capture"),
         open_directory(root.path() + "/rejected"),
@@ -231,8 +326,7 @@ int main()
       static_cast<void>(
           pkgapply::posix::application_posix_backend::from_directory_fds(
               target_context(), -1, store_descriptors[0], store_descriptors[1],
-              store_descriptors[2], store_descriptors[3], store_descriptors[4],
-              store_descriptors[5]));
+              store_descriptors[2], store_descriptors[3]));
     }
     catch (const pkgapply::posix::posix_backend_error& error) {
       invalid_descriptor_rejected = error.code() ==
@@ -270,17 +364,17 @@ int main()
       target.identity(), target.mutation_exclusion_domain());
   const auto state = state_projection(lease, plan.preconditions());
 
-  std::array<int, 7> descriptors = {
+  auto journal_store = pkgapply::posix::application_journal_store::open(
+      root.path() + "/journal");
+  std::array<int, 5> descriptors = {
       open_directory(target_path),
-      open_directory(root.path() + "/journal"),
-      open_directory(root.path() + "/checkpoint"),
       open_directory(root.path() + "/payload"),
       open_directory(root.path() + "/capture"),
       open_directory(root.path() + "/rejected"),
       open_directory(root.path() + "/completed")};
   auto backend = pkgapply::posix::application_posix_backend::from_directory_fds(
       target, descriptors[0], descriptors[1], descriptors[2], descriptors[3],
-      descriptors[4], descriptors[5], descriptors[6]);
+      descriptors[4]);
   for (int descriptor : descriptors)
     require(::close(descriptor) == 0, "cannot close caller backend descriptor");
 
@@ -387,168 +481,79 @@ int main()
   require(visible_entries(target_path) == 0,
           "transaction construction crossed the target boundary");
 
-  auto journal_transaction = backend->begin_with_incoming_image(
+  auto authority_probe = backend->begin_with_incoming_image(
       pkgapply::package_application_request(request), lease, archive.image());
-  std::vector<pkgplan::package_path> admitted_paths;
-  for (const auto& expected : plan.preconditions().paths())
-    admitted_paths.push_back(expected.path());
-  const auto admitted = journal_transaction->observe(admitted_paths);
-  require(admitted.observations().size() == admitted_paths.size(),
-          "POSIX transaction did not retain admission observations");
-  const auto attempt = pkgapply::application_attempt::make(
-      request.identity(), target.identity(), backend->identity(),
-      journal_transaction->attempt_nonce());
-  const auto header = pkgapply::application_journal_header::make(
-      pkgplan::operation_kind::install, request.identity(), plan.identity(),
-      attempt, target.identity(), request.control().identity(), state,
-      lease.identity(), backend->identity());
-  const auto unpublished_journal = pkgapply::application_journal_record::make(
-      header, pkgapply::application_journal_state::preparing, {}, {});
-  bool missing_checkpoint_rejected = false;
+  bool journal_sync_rejected = false;
   try {
-    static_cast<void>(backend->resume_with_incoming_image(
-        pkgapply::package_application_request(request), lease,
-        unpublished_journal, archive.image()));
+    static_cast<void>(authority_probe->synchronize(
+        pkgapply::application_durability_domain::journal));
   }
-  catch (const pkgapply::posix::posix_backend_error& error) {
-    missing_checkpoint_rejected = error.code() ==
-        pkgapply::posix::posix_backend_error_code::restart_checkpoint_missing;
+  catch (const std::invalid_argument&) {
+    journal_sync_rejected = true;
   }
-  require(missing_checkpoint_rejected,
-          "POSIX backend reopened a journal without its checkpoint");
-  const auto journal = journal_transaction->publish_journal(unpublished_journal);
-  const auto original_nonce = journal_transaction->attempt_nonce();
-  journal_transaction.reset();
+  require(journal_sync_rejected,
+          "mutation backend accepted semantic journal durability authority");
+  authority_probe.reset();
 
-  fake_lease restart_lease(
-      application_identity<pkgapply::mutation_lease_instance_identity>(41),
-      target.identity(), target.mutation_exclusion_domain());
-  auto resumed = backend->resume_with_incoming_image(
-      pkgapply::package_application_request(request), restart_lease, journal,
-      archive.image());
-  require(resumed->attempt_nonce() == original_nonce,
-          "reopened POSIX transaction allocated another attempt nonce");
-  require(resumed->resumed_journal().has_value() &&
-              *resumed->resumed_journal() == journal.identity(),
-          "reopened POSIX transaction lost the supplied journal identity");
-  const auto checkpoint = resumed->restart_checkpoint(journal);
-  require(checkpoint.journal() == journal.identity() &&
-              checkpoint.admitted_observations().requested() == admitted_paths,
-          "reopened POSIX transaction changed restart authority");
-  resumed.reset();
+  // Interrupt after the owner has durably committed the active intent but
+  // before the POSIX actuator is invoked. Restart must discover the exact
+  // declaration through the direct request locator, derive semantic replay
+  // state from owner steps, reopen the same physical attempt, and recover
+  // without replaying the actuator.
+  const int lock_directory = open_directory(root.path() + "/locks");
+  auto crash_lease = pkgapply::posix::target_mutation_lease::acquire(
+      target, lock_directory);
+  const auto crash_state = state_projection(*crash_lease, plan.preconditions());
+  bool active_interrupted = false;
+  interrupt_before_active_backend interrupting_backend(
+      *backend, active_interrupted);
+  bool interruption_observed = false;
+  try {
+    static_cast<void>(pkgapply::apply(
+        request, crash_state, *crash_lease, interrupting_backend,
+        *journal_store, archive));
+  }
+  catch (const std::runtime_error& error) {
+    require(std::string_view(error.what()) ==
+                "injected POSIX active interruption",
+            "POSIX restart fixture caught an unrelated runtime failure");
+    interruption_observed = true;
+  }
+  require(interruption_observed && active_interrupted,
+          "POSIX restart fixture did not interrupt the active mechanism");
+  const auto interrupted_declaration =
+      journal_store->load_active_declaration(request.identity());
+  require(interrupted_declaration.has_value(),
+          "POSIX restart fixture lost the direct declaration locator");
+  struct stat interrupted_status {};
+  require(::lstat((target_path + "/managed").c_str(), &interrupted_status) != 0 &&
+              errno == ENOENT,
+          "pre-actuator interruption changed the target");
 
-  // Restart continuation is admitted under a new physical lease. Completed
-  // evidence must therefore carry that current projection rather than the
-  // projection frozen in the original journal header. The backend owns the
-  // exact request/attempt/journal binding, but not semantic state-projection
-  // admission.
-  auto removal_transaction = backend->begin_without_incoming_image(
-      pkgapply::package_application_request(removal_request), lease);
-  const auto removal_observations = removal_transaction->observe({});
-  require(removal_observations.requested().empty(),
-          "empty removal fixture acquired unexpected observations");
-  const auto removal_attempt = pkgapply::application_attempt::make(
-      removal_request.identity(), target.identity(), backend->identity(),
-      removal_transaction->attempt_nonce());
-  const auto removal_state =
-      state_projection(lease, removal_plan.preconditions());
-  const auto removal_header = pkgapply::application_journal_header::make(
-      pkgplan::operation_kind::remove, removal_request.identity(),
-      removal_plan.identity(), removal_attempt, target.identity(),
-      removal_request.control().identity(), removal_state, lease.identity(),
-      backend->identity());
-  const auto removal_journal = removal_transaction->publish_journal(
-      pkgapply::application_journal_record::make(
-          removal_header, pkgapply::application_journal_state::preparing, {}, {}));
-
-  // A crash may leave immutable completed evidence bound to the original
-  // process projection before receipt sealing. Retain that historical record
-  // in the restart checkpoint, then prove a reopened transaction can publish
-  // another immutable record for the same request/attempt/journal authority
-  // under the newly acquired lease projection.
-  const auto historical_completed =
-      pkgapply::completed_application_evidence::removal(
-          removal_request, removal_journal.header().attempt().identity(),
-          removal_state.identity(), removal_journal.header().identity(), {},
-          confirmed_durability());
-  const auto historical_publication =
-      removal_transaction->publish_completed_evidence(historical_completed);
-  require(historical_publication.outcome() ==
-              pkgapply::backend_operation_outcome::completed &&
-              historical_publication.record().has_value() &&
-              *historical_publication.record() == historical_completed.identity(),
-          "POSIX backend did not publish historical completed evidence");
-  const auto historical_durability = removal_transaction->synchronize(
-      pkgapply::application_durability_domain::completed_evidence);
-  require(historical_durability.status() ==
-              pkgapply::application_durability_status::confirmed,
-          "POSIX backend did not durably confirm historical completed evidence");
-  const auto historical_journal = removal_transaction->publish_journal(
-      pkgapply::application_journal_record::make(
-          removal_header, pkgapply::application_journal_state::prepared, {}, {}));
-  removal_transaction.reset();
-
-  fake_lease removal_restart_lease(
-      application_identity<pkgapply::mutation_lease_instance_identity>(42),
-      target.identity(), target.mutation_exclusion_domain());
-  const auto removal_restart_state =
-      state_projection(removal_restart_lease, removal_plan.preconditions());
-  require(removal_restart_state.identity() !=
-              historical_journal.header().state_projection(),
-          "restart fixture reused the original state projection");
-  auto removal_resumed = backend->resume_without_incoming_image(
-      pkgapply::package_application_request(removal_request),
-      removal_restart_lease, historical_journal);
-  const auto historical_checkpoint =
-      removal_resumed->restart_checkpoint(historical_journal);
-  require(historical_checkpoint.completed_evidence().has_value() &&
-              historical_checkpoint.completed_evidence()->identity() ==
-                  historical_completed.identity(),
-          "POSIX restart did not retain historical completed evidence");
-  const auto completed = pkgapply::completed_application_evidence::removal(
-      removal_request, historical_journal.header().attempt().identity(),
-      removal_restart_state.identity(), historical_journal.header().identity(), {},
-      confirmed_durability());
-  require(completed.identity() != historical_completed.identity(),
-          "restart fixture did not change completed-evidence projection identity");
-  const auto completed_publication =
-      removal_resumed->publish_completed_evidence(completed);
-  require(completed_publication.outcome() ==
-              pkgapply::backend_operation_outcome::completed &&
-              completed_publication.record().has_value() &&
-              *completed_publication.record() == completed.identity(),
-          "POSIX restart rejected the current admitted state projection");
-  const auto rebound_durability = removal_resumed->synchronize(
-      pkgapply::application_durability_domain::completed_evidence);
-  require(rebound_durability.status() ==
-              pkgapply::application_durability_status::confirmed,
-          "POSIX restart did not durably confirm rebound completed evidence");
-  const auto rebound_journal = removal_resumed->publish_journal(
-      pkgapply::application_journal_record::make(
-          removal_header, pkgapply::application_journal_state::mutating, {}, {}));
-  removal_resumed.reset();
-
-  fake_lease checkpoint_lease(
-      application_identity<pkgapply::mutation_lease_instance_identity>(43),
-      target.identity(), target.mutation_exclusion_domain());
-  auto checkpoint_resumed = backend->resume_without_incoming_image(
-      pkgapply::package_application_request(removal_request), checkpoint_lease,
-      rebound_journal);
-  const auto rebound_checkpoint =
-      checkpoint_resumed->restart_checkpoint(rebound_journal);
-  require(rebound_checkpoint.completed_evidence().has_value() &&
-              rebound_checkpoint.completed_evidence()->identity() ==
-                  completed.identity() &&
-              rebound_checkpoint.completed_evidence()->state_projection() ==
-                  removal_restart_state.identity(),
-          "POSIX checkpoint did not retain rebound completed evidence");
-  checkpoint_resumed.reset();
+  crash_lease.reset();
+  auto restart_lease = pkgapply::posix::target_mutation_lease::acquire(
+      target, lock_directory);
+  const auto restart_state =
+      state_projection(*restart_lease, plan.preconditions());
+  const auto recovered = pkgapply::resume_application(
+      request, restart_state, *restart_lease, *backend, *journal_store,
+      *interrupted_declaration, archive);
+  require(recovered.outcome() ==
+              pkgapply::application_attempt_outcome::failed_fully_recovered,
+          "POSIX restart did not classify unresolved active intent as recovered");
+  require(::lstat((target_path + "/managed").c_str(), &interrupted_status) != 0 &&
+              errno == ENOENT,
+          "POSIX restart replayed an unresolved active actuator");
+  restart_lease.reset();
+  require(::close(lock_directory) == 0,
+          "cannot close POSIX restart lock-directory descriptor");
 
   require(::rename(target_path.c_str(), moved_target.c_str()) == 0,
           "cannot move selected target root");
   make_directory(target_path);
 
-  const auto receipt = pkgapply::apply(request, state, lease, *backend, archive);
+  const auto receipt = pkgapply::apply(
+      request, state, lease, *backend, *journal_store, archive);
   require(receipt.outcome() == pkgapply::application_attempt_outcome::completed,
           "POSIX backend did not complete directory installation");
   require(receipt.completed_evidence().has_value(),
@@ -562,9 +567,10 @@ int main()
               errno == ENOENT,
           "descriptor-anchored backend followed replacement pathname");
   require(visible_entries(root.path() + "/journal") != 0 &&
-              visible_entries(root.path() + "/checkpoint") != 0 &&
               visible_entries(root.path() + "/completed") != 0,
           "completed application did not publish durable authorities");
+  require(!std::filesystem::exists(root.path() + "/checkpoint"),
+          "generation-4 POSIX application recreated a checkpoint store");
 
   lease.release();
   bool rejected = false;

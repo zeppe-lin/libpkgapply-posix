@@ -117,7 +117,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgapply
-          ref: v3.0.1
+          ref: v4.0.0
           path: dependencies/libpkgapply
       - name: Install build dependencies
         run: |
@@ -156,7 +156,7 @@ jobs:
         run: ./ci/qualify-installed.sh build "${{ matrix.mode }}"
       - name: Qualify installed HTML documentation
         if: matrix.html_docs == 'enabled'
-        run: ./ci/qualify-html-docs.sh build libpkgapply-posix 3.2.3
+        run: ./ci/qualify-html-docs.sh build libpkgapply-posix 4.0.0
 
   sanitizers:
     name: ${{ matrix.name }} address,undefined
@@ -233,7 +233,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: zeppe-lin/libpkgapply
-          ref: v3.0.1
+          ref: v4.0.0
           path: dependencies/libpkgapply
       - name: Install build dependencies
         run: |

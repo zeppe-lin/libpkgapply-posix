@@ -4,32 +4,37 @@
 `libpkgapply`.
 
 It implements descriptor-anchored target observation, caller-owned mutation
-leases, private payload staging, old-object capture, rejected-object storage and direct identity reopening,
-durable journals and restart checkpoints, completed-evidence publication,
-active namespace mutation and recovery, and the composed
-`application_posix_backend`.
-Regular-file authority is opened nonblocking before type validation, so FIFO or
-other special-file corruption fails closed instead of wedging restart or evidence
-reopening.
+leases, private payload staging, old-object capture, rejected-object storage,
+completed-evidence publication, active namespace mutation/recovery, and a
+separate exact-name POSIX store for the owner-authored append-only application
+journal.
 
-The library does not construct package plans, decide semantic application
-policy, publish installed state, execute lifecycle programs, discover storage
-paths, or own package-manager configuration. Callers select all target and
-storage authorities explicitly.
+The journal store persists only canonical `libpkgapply` declaration, immutable
+step, and bounded cursor bytes. It does not encode semantic journal values,
+reconstruct execution history, enumerate storage to discover truth, or own a
+restart checkpoint.
+
+Regular-file authority is opened nonblocking before type validation, so FIFO or
+other special-file corruption fails closed instead of wedging restart or
+evidence reopening.
+
+The library does not construct package plans, decide application policy,
+publish installed state, execute lifecycle programs, discover storage paths, or
+own package-manager configuration. Callers select target and storage authorities
+explicitly and wire the mutation backend and journal store as separate objects.
 
 ## Why this is separate
 
-`libpkgapply` defines semantic requests, evidence, recovery obligations, and
-abstract backend contracts. POSIX mechanisms add filesystem system calls,
-descriptor lifetime rules, private storage protocols, and platform-specific
-failure modes. Keeping those bodies separate allows another backend to satisfy
-the same semantic contract and prevents host mechanics from contaminating the
-core ABI.
+`libpkgapply` owns requests, semantic history, replay interpretation, recovery
+selection, and canonical journal transport encoding. POSIX mechanisms own
+filesystem system calls, descriptor lifetime rules, durable byte publication,
+and platform-specific failure modes. Another backend can satisfy the same
+semantic contract without inheriting this storage layout.
 
 ## Products
 
-- `libpkgapply-posix.so.2` — POSIX mechanism implementations and backend
-  composition.
+- `libpkgapply-posix.so.3` — generation-3 POSIX mechanism ABI for
+  `libpkgapply` generation 4.
 - `libpkgapply-posix.3` — installed API and operational contract.
 
 ## Build

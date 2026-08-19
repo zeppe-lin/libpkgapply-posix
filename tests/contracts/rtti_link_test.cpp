@@ -11,10 +11,10 @@ int main()
   using namespace pkgapply::posix;
 
   const std::array<const std::type_info*, 12> public_rtti{
+      &typeid(application_journal_store),
       &typeid(application_payload_stage),
       &typeid(application_posix_backend),
       &typeid(capture_store_error),
-      &typeid(checkpoint_store_error),
       &typeid(completed_evidence_store_error),
       &typeid(journal_store_error),
       &typeid(payload_stage_error),

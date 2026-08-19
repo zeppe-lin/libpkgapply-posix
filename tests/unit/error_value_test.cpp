@@ -3,7 +3,6 @@
 
 #include <libpkgapply-posix/backend.h>
 #include <libpkgapply-posix/capture_store.h>
-#include <libpkgapply-posix/checkpoint_store.h>
 #include <libpkgapply-posix/completed_evidence_store.h>
 #include <libpkgapply-posix/journal_store.h>
 #include <libpkgapply-posix/mutation_lease.h>
@@ -44,15 +43,6 @@ int main()
               capture.system_error() == ESTALE && capture.path() == "path",
           "capture error lost its typed evidence");
 
-  const checkpoint_store_error checkpoint(
-      checkpoint_store_error_code::directory_sync_failed, EIO,
-      "checkpoint", true);
-  require(checkpoint.code() ==
-              checkpoint_store_error_code::directory_sync_failed &&
-              checkpoint.system_error() == EIO &&
-              checkpoint.publication_visible(),
-          "checkpoint error lost publication visibility");
-
   const completed_evidence_store_error completed(
       completed_evidence_store_error_code::namespace_sync_failed, EIO,
       "completed", true);
@@ -65,8 +55,8 @@ int main()
   const journal_store_error journal(
       journal_store_error_code::directory_sync_failed, EIO, "journal", true);
   require(journal.code() == journal_store_error_code::directory_sync_failed &&
-              journal.system_error() == EIO && journal.replacement_visible(),
-          "journal error lost replacement visibility");
+              journal.system_error() == EIO && journal.publication_visible(),
+          "journal error lost publication visibility");
 
   const target_mutation_lease_error lease(
       target_mutation_lease_error_code::lock_busy, EWOULDBLOCK, "lease");

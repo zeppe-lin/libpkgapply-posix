@@ -23,7 +23,6 @@ libpkgapply_posix_sources = files(
   'active_workspace.cpp',
   'capture_store.cpp',
   'completed_evidence_store.cpp',
-  'checkpoint_store.cpp',
   'journal_store.cpp',
   'mutation_lease.cpp',
   'payload_stage.cpp',
@@ -49,7 +48,7 @@ libpkgapply_posix = library(
   dependencies: libpkgapply_posix_implementation_deps,
   install: true,
   version: meson.project_version(),
-  soversion: '2',
+  soversion: '3',
 )
 
 libpkgapply_posix_consumer_deps = [libpkgapply_dep, libpkgimage_dep]
@@ -72,7 +71,6 @@ install_headers(
   '../include/libpkgapply-posix/libpkgapply-posix.h',
   '../include/libpkgapply-posix/capture_store.h',
   '../include/libpkgapply-posix/completed_evidence_store.h',
-  '../include/libpkgapply-posix/checkpoint_store.h',
   '../include/libpkgapply-posix/journal_store.h',
   '../include/libpkgapply-posix/mutation_lease.h',
   '../include/libpkgapply-posix/payload_stage.h',
@@ -88,8 +86,8 @@ pkgconf.generate(
   description: 'POSIX mechanisms for libpkgapply',
   subdirs: '.',
   requires: [
-    'libpkgapply >= 3.0.1',
-    'libpkgapply < 4.0.0',
+    'libpkgapply >= 4.0.0',
+    'libpkgapply < 5.0.0',
     'libpkgimage >= 0.4.0',
   ],
   requires_private: [

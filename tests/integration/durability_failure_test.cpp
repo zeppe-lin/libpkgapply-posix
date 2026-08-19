@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexandr Savca
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include "checkpoint_test_fixture.h"
+#include "application_test_fixture.h"
 
 #include <libpkgapply-posix/backend.h>
 #include <libpkgapply/capture.h>
@@ -122,22 +122,19 @@ private:
 class backend_layout final {
 public:
   explicit backend_layout(std::uint8_t lease_seed)
-      : target_(pkgapply::test::checkpoint_fixture::target()),
-        lease_(pkgapply::test::checkpoint_fixture::application_identity<
+      : target_(pkgapply::test::application_fixture::target()),
+        lease_(pkgapply::test::application_fixture::application_identity<
                    pkgapply::mutation_lease_instance_identity>(lease_seed),
                target_.identity(), target_.mutation_exclusion_domain())
   {
     make_directory(root_.path() + "/target");
     for (const auto* name : {
-             "journal", "checkpoint", "payload", "capture", "rejected",
-             "completed"}) {
+             "payload", "capture", "rejected", "completed"}) {
       make_directory(root_.path() + "/" + name);
     }
 
-    std::array<int, 7> descriptors = {
+    std::array<int, 5> descriptors = {
         open_directory(root_.path() + "/target"),
-        open_directory(root_.path() + "/journal"),
-        open_directory(root_.path() + "/checkpoint"),
         open_directory(root_.path() + "/payload"),
         open_directory(root_.path() + "/capture"),
         open_directory(root_.path() + "/rejected"),
@@ -145,7 +142,7 @@ public:
     };
     backend_ = pkgapply::posix::application_posix_backend::from_directory_fds(
         target_, descriptors[0], descriptors[1], descriptors[2], descriptors[3],
-        descriptors[4], descriptors[5], descriptors[6]);
+        descriptors[4]);
     for (const int descriptor : descriptors) {
       require(::close(descriptor) == 0, "cannot close caller descriptor");
     }
@@ -193,7 +190,7 @@ void observe_preconditions(
 }
 
 template<class Request>
-pkgapply::application_journal_record publish_preparing_journal(
+pkgapply::application_journal_header journal_header(
     pkgapply::application_backend_transaction& transaction,
     const Request& request,
     const fake_lease& lease,
@@ -204,22 +201,19 @@ pkgapply::application_journal_record publish_preparing_journal(
       transaction.attempt_nonce());
   std::vector<pkgapply::projected_path_owners> projected_paths;
   projected_paths.reserve(request.plan().preconditions().paths().size());
-  for (const auto& expected : request.plan().preconditions().paths()) {
+  for (const auto& expected : request.plan().preconditions().paths())
     projected_paths.emplace_back(expected.path(), expected.owners());
-  }
   const auto state_projection = pkgapply::lease_bound_state_projection::make(
       lease.identity(), request.plan().preconditions().installed_snapshot(),
       request.plan().preconditions().ownership_inventory(),
       pkgapply::state_projection_completeness::complete,
       std::move(projected_paths),
-      pkgapply::test::checkpoint_fixture::application_identity<
+      pkgapply::test::application_fixture::application_identity<
           pkgapply::state_projection_evidence_identity>(state_projection_seed));
-  const auto header = pkgapply::application_journal_header::make(
+  return pkgapply::application_journal_header::make(
       request.plan().kind(), request.identity(), request.plan().identity(),
       attempt, request.target().identity(), request.control().identity(),
       state_projection, lease.identity(), transaction.backend());
-  return transaction.publish_journal(pkgapply::application_journal_record::make(
-      header, pkgapply::application_journal_state::preparing, {}, {}));
 }
 
 void expect_unconfirmed_then_retry(
@@ -259,23 +253,6 @@ pkgimage::package_entry regular_entry(std::string path)
   return entry;
 }
 
-void test_journal_durability_failure()
-{
-  backend_layout layout(70);
-  const auto request = pkgapply::test::checkpoint_fixture::request("journal");
-  const pkgimage::package_image image({
-      pkgapply::test::fixture::directory_entry("journal"),
-  });
-  auto transaction = layout.backend().begin_with_incoming_image(
-      pkgapply::package_application_request(request), layout.lease(), image);
-  observe_preconditions(*transaction, request.plan().preconditions());
-  static_cast<void>(publish_preparing_journal(
-      *transaction, request, layout.lease(), 71));
-
-  expect_unconfirmed_then_retry(
-      *transaction, pkgapply::application_durability_domain::journal,
-      "journal");
-}
 
 void test_incoming_staging_durability_failure()
 {
@@ -290,7 +267,7 @@ void test_incoming_staging_durability_failure()
       {}, std::nullopt, digest);
   const auto request = pkgapply::installation_application_request::make(
       plan, pkgapply::test::fixture::incoming_package({entry}, digest),
-      layout.target(), pkgapply::test::checkpoint_fixture::control());
+      layout.target(), pkgapply::test::application_fixture::control());
   const pkgimage::package_image image({entry});
   auto transaction = layout.backend().begin_with_incoming_image(
       pkgapply::package_application_request(request), layout.lease(), image);
@@ -328,7 +305,7 @@ void test_recovery_staging_durability_failure()
       {pkgplan::target_path_observation::present(
           pkgplan::filesystem_object_fact(path, object))});
   const auto request = pkgapply::removal_application_request::make(
-      plan, layout.target(), pkgapply::test::checkpoint_fixture::control());
+      plan, layout.target(), pkgapply::test::application_fixture::control());
   auto transaction = layout.backend().begin_without_incoming_image(
       pkgapply::package_application_request(request), layout.lease());
   observe_preconditions(*transaction, request.plan().preconditions());
@@ -367,7 +344,7 @@ void test_rejected_store_durability_failure()
       {}, policy, digest);
   const auto request = pkgapply::installation_application_request::make(
       plan, pkgapply::test::fixture::incoming_package({entry}, digest),
-      layout.target(), pkgapply::test::checkpoint_fixture::control());
+      layout.target(), pkgapply::test::application_fixture::control());
   const pkgimage::package_image image({entry});
   auto transaction = layout.backend().begin_with_incoming_image(
       pkgapply::package_application_request(request), layout.lease(), image);
@@ -387,24 +364,24 @@ void test_rejected_store_durability_failure()
 void test_completed_evidence_durability_failure()
 {
   backend_layout layout(110);
-  const auto request = pkgapply::test::checkpoint_fixture::request("completed");
+  const auto request = pkgapply::test::application_fixture::request("completed");
   const pkgimage::package_image image({
       pkgapply::test::fixture::directory_entry("completed"),
   });
   auto transaction = layout.backend().begin_with_incoming_image(
       pkgapply::package_application_request(request), layout.lease(), image);
   observe_preconditions(*transaction, request.plan().preconditions());
-  const auto journal = publish_preparing_journal(
+  const auto header = journal_header(
       *transaction, request, layout.lease(), 111);
   const auto attempt = pkgapply::application_attempt::make(
       request.identity(), request.target().identity(), transaction->backend(),
       transaction->attempt_nonce());
   const auto evidence = pkgapply::completed_application_evidence::installation(
-      request, attempt.identity(), journal.header().state_projection(),
-      journal.header().identity(),
-      {pkgapply::test::checkpoint_fixture::completed_path(
+      request, attempt.identity(), header.state_projection(),
+      header.identity(),
+      {pkgapply::test::application_fixture::completed_path(
           request.plan().paths().front())},
-      pkgapply::test::checkpoint_fixture::durability());
+      pkgapply::test::application_fixture::durability());
   require(transaction->publish_completed_evidence(evidence).outcome() ==
               pkgapply::backend_operation_outcome::completed,
           "completed durability fixture did not publish evidence authority");
@@ -427,7 +404,6 @@ extern "C" int fsync(int descriptor)
 
 int main()
 {
-  test_journal_durability_failure();
   test_incoming_staging_durability_failure();
   test_recovery_staging_durability_failure();
   test_rejected_store_durability_failure();

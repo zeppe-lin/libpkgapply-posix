@@ -13,8 +13,8 @@
 
 namespace pkgapply::posix {
 
-/*! \brief Public provider API generation inherited from the in-tree product. */
-inline constexpr std::uint32_t api_version = 2;
+/*! \brief Public provider API generation for the append-only journal/store boundary. */
+inline constexpr std::uint32_t api_version = 3;
 
 /*! \brief Return the linked libpkgapply-posix release version.
  *  \return Static semantic-version string with process lifetime.

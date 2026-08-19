@@ -97,7 +97,6 @@ if html_docs_enabled
     '../tools/canonicalize-man-roff.awk',
     '../include/libpkgapply-posix/backend.h',
     '../include/libpkgapply-posix/capture_store.h',
-    '../include/libpkgapply-posix/checkpoint_store.h',
     '../include/libpkgapply-posix/completed_evidence_store.h',
     '../include/libpkgapply-posix/export.h',
     '../include/libpkgapply-posix/journal_store.h',

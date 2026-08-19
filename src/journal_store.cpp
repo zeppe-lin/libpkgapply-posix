@@ -3,10 +3,12 @@
 
 #include <libpkgapply-posix/journal_store.h>
 
-#include <libpkgapply/journal_codec.h>
+#include <libpkgapply/journal_transport_codec.h>
 
+#include <array>
 #include <atomic>
 #include <cerrno>
+#include <charconv>
 #include <cstdint>
 #include <cstring>
 #include <fcntl.h>
@@ -18,7 +20,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <utility>
-#include <vector>
 
 namespace pkgapply::posix {
 namespace {
@@ -59,108 +60,14 @@ private:
 
 std::atomic<std::uint64_t> temporary_sequence{0};
 
-[[noreturn]] void throw_system(
-    journal_store_error_code code,
-    std::string_view operation,
-    int error = errno,
-    bool replacement_visible = false)
+[[noreturn]] void throw_system(journal_store_error_code code,
+                               std::string_view operation,
+                               int error = errno,
+                               bool publication_visible = false)
 {
   throw journal_store_error(
-      code, error,
-      std::string(operation) + ": " + std::strerror(error),
-      replacement_visible);
-}
-
-int open_path(const char* path, int flags)
-{
-  for (;;) {
-    const int result = ::open(path, flags);
-    if (result >= 0 || errno != EINTR)
-      return result;
-  }
-}
-
-int open_at(int directory_fd, const char* path, int flags, mode_t mode = 0)
-{
-  for (;;) {
-    const int result = mode == 0
-        ? ::openat(directory_fd, path, flags)
-        : ::openat(directory_fd, path, flags, mode);
-    if (result >= 0 || errno != EINTR)
-      return result;
-  }
-}
-
-void synchronize_fd(
-    int fd,
-    journal_store_error_code code,
-    std::string_view operation,
-    bool replacement_visible = false)
-{
-  for (;;) {
-    if (::fsync(fd) == 0)
-      return;
-    if (errno != EINTR)
-      throw_system(code, operation, errno, replacement_visible);
-  }
-}
-
-void replace_at(
-    int directory_fd,
-    const std::string& temporary,
-    const std::string& final_name)
-{
-  for (;;) {
-    if (::renameat(
-            directory_fd, temporary.c_str(), directory_fd,
-            final_name.c_str()) == 0)
-    {
-      return;
-    }
-    if (errno != EINTR)
-      throw_system(
-          journal_store_error_code::snapshot_rename_failed,
-          "cannot replace journal snapshot");
-  }
-}
-
-void require_directory(int fd)
-{
-  struct stat status {};
-  if (::fstat(fd, &status) != 0)
-    throw_system(
-        journal_store_error_code::directory_invalid,
-        "cannot inspect journal-store directory");
-  if (!S_ISDIR(status.st_mode))
-    throw journal_store_error(
-        journal_store_error_code::directory_invalid, 0,
-        "journal-store descriptor does not name a directory");
-}
-
-std::string digest_suffix(std::string_view text, std::string_view subject)
-{
-  constexpr std::string_view prefix = "v1:sha256:";
-  if (text.size() != prefix.size() + 64 ||
-      text.compare(0, prefix.size(), prefix) != 0)
-  {
-    throw journal_store_error(
-        journal_store_error_code::snapshot_corrupt, 0,
-        std::string(subject) +
-            " identity has no supported storage representation");
-  }
-  return std::string(text.substr(prefix.size()));
-}
-
-std::string storage_name(const application_journal_identity& identity)
-{
-  return "journal-v1-sha256-" +
-         digest_suffix(identity.string(), "journal") + ".bin";
-}
-
-std::string active_name(const application_request_identity& identity)
-{
-  return "active-request-v1-sha256-" +
-         digest_suffix(identity.string(), "application request") + ".ref";
+      code, error, std::string(operation) + ": " + std::strerror(error),
+      publication_visible);
 }
 
 int nofollow_flag() noexcept
@@ -186,149 +93,108 @@ void set_close_on_exec(int fd)
 #ifndef O_CLOEXEC
   const int flags = ::fcntl(fd, F_GETFD);
   if (flags < 0 || ::fcntl(fd, F_SETFD, flags | FD_CLOEXEC) < 0)
-    throw_system(
-        journal_store_error_code::directory_open_failed,
-        "cannot set close-on-exec on journal-store descriptor");
+    throw_system(journal_store_error_code::directory_open_failed,
+                 "cannot set close-on-exec on journal-store descriptor");
 #else
   static_cast<void>(fd);
 #endif
 }
 
-std::optional<application_journal_encoding> read_encoding(
-    int directory_fd,
-    const std::string& name)
+int open_path(const char* path, int flags)
 {
-  const int flags = O_RDONLY | cloexec_flag() | nofollow_flag() | O_NONBLOCK;
-  unique_fd file(open_at(directory_fd, name.c_str(), flags));
-  if (file.get() < 0) {
-    if (errno == ENOENT)
-      return std::nullopt;
-    throw_system(
-        journal_store_error_code::snapshot_open_failed,
-        "cannot open journal snapshot");
+  for (;;) {
+    const int result = ::open(path, flags);
+    if (result >= 0 || errno != EINTR)
+      return result;
   }
-  set_close_on_exec(file.get());
+}
 
+int open_at(int directory_fd, const char* path, int flags, mode_t mode = 0)
+{
+  for (;;) {
+    const int result = mode == 0
+        ? ::openat(directory_fd, path, flags)
+        : ::openat(directory_fd, path, flags, mode);
+    if (result >= 0 || errno != EINTR)
+      return result;
+  }
+}
+
+void require_directory(int fd, std::string_view subject)
+{
   struct stat status {};
-  if (::fstat(file.get(), &status) != 0)
-    throw_system(
-        journal_store_error_code::snapshot_read_failed,
-        "cannot inspect journal snapshot");
+  if (::fstat(fd, &status) != 0)
+    throw_system(journal_store_error_code::directory_invalid,
+                 std::string("cannot inspect ") + std::string(subject));
+  if (!S_ISDIR(status.st_mode))
+    throw journal_store_error(
+        journal_store_error_code::directory_invalid, 0,
+        std::string(subject) + " does not name a directory");
+}
+
+void require_regular(int fd, std::string_view subject)
+{
+  struct stat status {};
+  if (::fstat(fd, &status) != 0)
+    throw_system(journal_store_error_code::value_read_failed,
+                 std::string("cannot inspect ") + std::string(subject));
   if (!S_ISREG(status.st_mode))
     throw journal_store_error(
-        journal_store_error_code::snapshot_corrupt, 0,
-        "journal snapshot is not a regular file");
-  if (status.st_size < 0 ||
-      static_cast<std::uint64_t>(status.st_size) >
-          maximum_application_journal_encoding_size)
+        journal_store_error_code::value_corrupt, 0,
+        std::string(subject) + " is not a regular file");
+}
+
+void synchronize_fd(int fd,
+                    journal_store_error_code code,
+                    std::string_view operation,
+                    bool publication_visible = false)
+{
+  for (;;) {
+    if (::fsync(fd) == 0)
+      return;
+    if (errno != EINTR)
+      throw_system(code, operation, errno, publication_visible);
+  }
+}
+
+std::string digest_suffix(std::string_view text, std::string_view subject)
+{
+  constexpr std::string_view prefix = "v1:sha256:";
+  if (text.size() != prefix.size() + 64 ||
+      text.compare(0, prefix.size(), prefix) != 0)
   {
     throw journal_store_error(
-        journal_store_error_code::snapshot_corrupt, 0,
-        "journal snapshot exceeds the encoding size limit");
+        journal_store_error_code::value_corrupt, 0,
+        std::string(subject) + " identity has no supported storage representation");
   }
-
-  application_journal_encoding bytes(
-      static_cast<std::size_t>(status.st_size));
-  std::size_t offset = 0;
-  while (offset < bytes.size()) {
-    const auto result = ::read(
-        file.get(), bytes.data() + offset, bytes.size() - offset);
-    if (result < 0) {
-      if (errno == EINTR)
-        continue;
-      throw_system(
-          journal_store_error_code::snapshot_read_failed,
-          "cannot read journal snapshot");
-    }
-    if (result == 0)
-      throw journal_store_error(
-          journal_store_error_code::snapshot_corrupt, 0,
-          "journal snapshot was truncated while reading");
-    offset += static_cast<std::size_t>(result);
-  }
-
-  std::uint8_t probe = 0;
-  for (;;) {
-    const auto result = ::read(file.get(), &probe, 1);
-    if (result < 0 && errno == EINTR)
-      continue;
-    if (result < 0)
-      throw_system(
-          journal_store_error_code::snapshot_read_failed,
-          "cannot finish reading journal snapshot");
-    if (result != 0)
-      throw journal_store_error(
-          journal_store_error_code::snapshot_corrupt, 0,
-          "journal snapshot changed size while reading");
-    break;
-  }
-  return bytes;
+  return std::string(text.substr(prefix.size()));
 }
 
-application_journal_encoding encode_active_reference(
-    const application_journal_identity& journal)
+std::string journal_name(const application_journal_declaration_identity& identity)
 {
-  const auto text = journal.string() + "\n";
-  return application_journal_encoding(text.begin(), text.end());
+  return "journal-v1-sha256-" +
+         digest_suffix(identity.string(), "journal declaration");
 }
 
-application_journal_identity decode_active_reference(
-    const application_journal_encoding& encoding)
+std::string active_name(const application_request_identity& identity)
 {
-  constexpr std::size_t encoded_size = 10 + 64 + 1;
-  if (encoding.size() != encoded_size || encoding.back() != '\n')
-    throw journal_store_error(
-        journal_store_error_code::snapshot_corrupt, 0,
-        "active application-request index is malformed");
-  try {
-    return application_journal_identity::parse(std::string(
-        encoding.begin(), encoding.end() - 1));
-  } catch (const std::exception& error) {
-    throw journal_store_error(
-        journal_store_error_code::snapshot_corrupt, 0,
-        std::string("active application-request index is corrupt: ") +
-            error.what());
-  }
+  return "active-request-v1-sha256-" +
+         digest_suffix(identity.string(), "application request") + ".ref";
 }
 
-application_journal_record decode_stored(
-    const application_journal_encoding& encoding,
-    const application_journal_identity& expected)
+std::string step_name(std::uint64_t sequence)
 {
-  try {
-    auto record = decode_application_journal(encoding);
-    if (record.header().identity() != expected)
-      throw journal_store_error(
-          journal_store_error_code::snapshot_corrupt, 0,
-          "journal snapshot filename and content disagree");
-    return record;
-  } catch (const journal_store_error&) {
-    throw;
-  } catch (const application_journal_codec_error& error) {
-    throw journal_store_error(
-        journal_store_error_code::snapshot_corrupt, 0,
-        std::string("journal snapshot is corrupt: ") + error.what());
-  }
-}
-
-void write_all(int fd, const application_journal_encoding& bytes)
-{
-  std::size_t offset = 0;
-  while (offset < bytes.size()) {
-    const auto result = ::write(fd, bytes.data() + offset, bytes.size() - offset);
-    if (result < 0) {
-      if (errno == EINTR)
-        continue;
-      throw_system(
-          journal_store_error_code::snapshot_write_failed,
-          "cannot write journal snapshot");
-    }
-    if (result == 0)
-      throw journal_store_error(
-          journal_store_error_code::snapshot_write_failed, 0,
-          "journal snapshot write made no progress");
-    offset += static_cast<std::size_t>(result);
-  }
+  std::array<char, 32> digits {};
+  const auto result = std::to_chars(digits.data(), digits.data() + digits.size(),
+                                    sequence);
+  if (result.ec != std::errc())
+    throw journal_store_error(journal_store_error_code::value_corrupt, 0,
+                              "cannot format journal step sequence");
+  const auto length = static_cast<std::size_t>(result.ptr - digits.data());
+  std::string name(20U - length, '0');
+  name.append(digits.data(), length);
+  name += ".bin";
+  return name;
 }
 
 std::string temporary_name(const std::string& final_name)
@@ -338,12 +204,92 @@ std::string temporary_name(const std::string& final_name)
          "." + std::to_string(sequence);
 }
 
-void publish_encoding(
+std::optional<application_journal_transport_encoding> read_encoding(
     int directory_fd,
-    const std::string& final_name,
-    const application_journal_encoding& bytes)
+    const std::string& name,
+    std::string_view subject)
 {
-  std::string temporary;
+  const int flags = O_RDONLY | cloexec_flag() | nofollow_flag() | O_NONBLOCK;
+  unique_fd file(open_at(directory_fd, name.c_str(), flags));
+  if (file.get() < 0) {
+    if (errno == ENOENT)
+      return std::nullopt;
+    throw_system(journal_store_error_code::value_open_failed,
+                 std::string("cannot open ") + std::string(subject));
+  }
+  set_close_on_exec(file.get());
+  require_regular(file.get(), subject);
+
+  struct stat status {};
+  if (::fstat(file.get(), &status) != 0)
+    throw_system(journal_store_error_code::value_read_failed,
+                 std::string("cannot size ") + std::string(subject));
+  if (status.st_size < 0 ||
+      static_cast<std::uint64_t>(status.st_size) >
+          maximum_application_journal_transport_encoding_size)
+  {
+    throw journal_store_error(
+        journal_store_error_code::value_corrupt, 0,
+        std::string(subject) + " exceeds the owner transport size limit");
+  }
+
+  application_journal_transport_encoding bytes(
+      static_cast<std::size_t>(status.st_size));
+  std::size_t offset = 0;
+  while (offset < bytes.size()) {
+    const auto result = ::read(file.get(), bytes.data() + offset,
+                               bytes.size() - offset);
+    if (result < 0) {
+      if (errno == EINTR)
+        continue;
+      throw_system(journal_store_error_code::value_read_failed,
+                   std::string("cannot read ") + std::string(subject));
+    }
+    if (result == 0)
+      throw journal_store_error(journal_store_error_code::value_corrupt, 0,
+                                std::string(subject) + " was truncated while reading");
+    offset += static_cast<std::size_t>(result);
+  }
+
+  std::uint8_t probe = 0;
+  for (;;) {
+    const auto result = ::read(file.get(), &probe, 1);
+    if (result < 0 && errno == EINTR)
+      continue;
+    if (result < 0)
+      throw_system(journal_store_error_code::value_read_failed,
+                   std::string("cannot finish reading ") + std::string(subject));
+    if (result != 0)
+      throw journal_store_error(journal_store_error_code::value_corrupt, 0,
+                                std::string(subject) + " changed size while reading");
+    break;
+  }
+  return bytes;
+}
+
+void write_all(int fd, const application_journal_transport_encoding& bytes)
+{
+  std::size_t offset = 0;
+  while (offset < bytes.size()) {
+    const auto result = ::write(fd, bytes.data() + offset, bytes.size() - offset);
+    if (result < 0) {
+      if (errno == EINTR)
+        continue;
+      throw_system(journal_store_error_code::value_write_failed,
+                   "cannot write journal transport bytes");
+    }
+    if (result == 0)
+      throw journal_store_error(journal_store_error_code::value_write_failed, 0,
+                                "journal transport write made no progress");
+    offset += static_cast<std::size_t>(result);
+  }
+}
+
+unique_fd write_temporary(int directory_fd,
+                          const std::string& final_name,
+                          const application_journal_transport_encoding& bytes,
+                          std::string& temporary)
+{
   unique_fd file;
   for (int attempt = 0; attempt < 128; ++attempt) {
     temporary = temporary_name(final_name);
@@ -353,44 +299,285 @@ void publish_encoding(
     if (file.get() >= 0)
       break;
     if (errno != EEXIST)
-      throw_system(
-          journal_store_error_code::snapshot_open_failed,
-          "cannot create temporary journal snapshot");
+      throw_system(journal_store_error_code::value_open_failed,
+                   "cannot create temporary journal transport value");
   }
   if (file.get() < 0)
-    throw journal_store_error(
-        journal_store_error_code::snapshot_open_failed, EEXIST,
-        "cannot allocate a unique temporary journal snapshot");
+    throw journal_store_error(journal_store_error_code::value_open_failed,
+                              EEXIST,
+                              "cannot allocate a unique temporary journal value");
   set_close_on_exec(file.get());
+  write_all(file.get(), bytes);
+  synchronize_fd(file.get(), journal_store_error_code::value_sync_failed,
+                 "cannot synchronize journal transport value");
+  return file;
+}
 
-  try {
-    write_all(file.get(), bytes);
-    synchronize_fd(
-        file.get(), journal_store_error_code::snapshot_sync_failed,
-        "cannot synchronize temporary journal snapshot");
-    file.reset();
-
-    replace_at(directory_fd, temporary, final_name);
-    temporary.clear();
-    synchronize_fd(
-        directory_fd, journal_store_error_code::directory_sync_failed,
-        "cannot synchronize journal-store directory", true);
-  } catch (...) {
-    if (!temporary.empty())
+void publish_replacement(int directory_fd,
+                         const std::string& final_name,
+                         const application_journal_transport_encoding& bytes)
+{
+  std::string temporary;
+  auto file = write_temporary(directory_fd, final_name, bytes, temporary);
+  file.reset();
+  for (;;) {
+    if (::renameat(directory_fd, temporary.c_str(), directory_fd,
+                   final_name.c_str()) == 0)
+      break;
+    if (errno != EINTR) {
+      const int error = errno;
       static_cast<void>(::unlinkat(directory_fd, temporary.c_str(), 0));
+      throw_system(journal_store_error_code::value_publish_failed,
+                   "cannot atomically replace journal transport value", error);
+    }
+  }
+  synchronize_fd(directory_fd, journal_store_error_code::directory_sync_failed,
+                 "cannot synchronize journal namespace", true);
+}
+
+void publish_immutable(int directory_fd,
+                       const std::string& final_name,
+                       const application_journal_transport_encoding& bytes)
+{
+  if (const auto current = read_encoding(directory_fd, final_name,
+                                         "immutable journal value")) {
+    if (*current == bytes)
+      return;
+    throw journal_store_error(journal_store_error_code::immutable_conflict, 0,
+                              "immutable journal value already differs");
+  }
+
+  std::string temporary;
+  auto file = write_temporary(directory_fd, final_name, bytes, temporary);
+  file.reset();
+
+  for (;;) {
+    if (::linkat(directory_fd, temporary.c_str(), directory_fd,
+                 final_name.c_str(), 0) == 0)
+      break;
+    if (errno == EINTR)
+      continue;
+    if (errno == EEXIST) {
+      static_cast<void>(::unlinkat(directory_fd, temporary.c_str(), 0));
+      const auto current = read_encoding(directory_fd, final_name,
+                                         "immutable journal value");
+      if (current && *current == bytes)
+        return;
+      throw journal_store_error(journal_store_error_code::immutable_conflict, 0,
+                                "concurrent immutable journal value differs");
+    }
+    const int error = errno;
+    static_cast<void>(::unlinkat(directory_fd, temporary.c_str(), 0));
+    throw_system(journal_store_error_code::value_publish_failed,
+                 "cannot publish immutable journal value", error);
+  }
+
+  synchronize_fd(directory_fd, journal_store_error_code::directory_sync_failed,
+                 "cannot synchronize immutable journal publication", true);
+  if (::unlinkat(directory_fd, temporary.c_str(), 0) != 0 && errno != ENOENT)
+    throw_system(journal_store_error_code::value_publish_failed,
+                 "cannot remove immutable journal temporary link", errno, true);
+  synchronize_fd(directory_fd, journal_store_error_code::directory_sync_failed,
+                 "cannot synchronize immutable journal cleanup", true);
+}
+
+std::optional<unique_fd> open_child_directory(int parent_fd,
+                                              const std::string& name,
+                                              std::string_view subject)
+{
+  int flags = O_RDONLY | cloexec_flag() | nofollow_flag();
+#ifdef O_DIRECTORY
+  flags |= O_DIRECTORY;
+#endif
+  unique_fd fd(open_at(parent_fd, name.c_str(), flags));
+  if (fd.get() < 0) {
+    if (errno == ENOENT)
+      return std::nullopt;
+    throw_system(journal_store_error_code::namespace_open_failed,
+                 std::string("cannot open ") + std::string(subject));
+  }
+  set_close_on_exec(fd.get());
+  require_directory(fd.get(), subject);
+  return std::optional<unique_fd>(std::move(fd));
+}
+
+unique_fd ensure_child_directory(int parent_fd,
+                                 const std::string& name,
+                                 std::string_view subject)
+{
+  bool created = false;
+  if (::mkdirat(parent_fd, name.c_str(), 0700) != 0) {
+    if (errno != EEXIST)
+      throw_system(journal_store_error_code::namespace_open_failed,
+                   std::string("cannot create ") + std::string(subject));
+  } else {
+    created = true;
+  }
+  auto opened = open_child_directory(parent_fd, name, subject);
+  if (!opened)
+    throw journal_store_error(journal_store_error_code::namespace_open_failed,
+                              ENOENT,
+                              std::string(subject) + " disappeared after creation");
+  if (created)
+    synchronize_fd(parent_fd, journal_store_error_code::directory_sync_failed,
+                   std::string("cannot synchronize ") + std::string(subject) +
+                       " parent");
+  return std::move(*opened);
+}
+
+unique_fd open_required_journal(int root_fd,
+                                const application_journal_declaration_identity& identity)
+{
+  auto journal = open_child_directory(root_fd, journal_name(identity),
+                                      "journal declaration namespace");
+  if (!journal)
+    throw journal_store_error(journal_store_error_code::namespace_open_failed,
+                              ENOENT,
+                              "journal declaration namespace is absent");
+  return std::move(*journal);
+}
+
+unique_fd open_required_steps(int journal_fd)
+{
+  auto steps = open_child_directory(journal_fd, "steps", "journal steps namespace");
+  if (!steps)
+    throw journal_store_error(journal_store_error_code::value_corrupt, ENOENT,
+                              "journal steps namespace is absent");
+  return std::move(*steps);
+}
+
+void require_declaration_file(int journal_fd)
+{
+  const int flags = O_RDONLY | cloexec_flag() | nofollow_flag() | O_NONBLOCK;
+  unique_fd file(open_at(journal_fd, "declaration.bin", flags));
+  if (file.get() < 0) {
+    if (errno == ENOENT)
+      throw journal_store_error(journal_store_error_code::value_corrupt, ENOENT,
+                                "journal declaration bytes are absent");
+    throw_system(journal_store_error_code::value_open_failed,
+                 "cannot open journal declaration bytes");
+  }
+  set_close_on_exec(file.get());
+  require_regular(file.get(), "journal declaration bytes");
+}
+
+application_journal_transport_encoding encode_active_reference(
+    const application_journal_declaration_identity& declaration)
+{
+  const auto text = declaration.string() + "\n";
+  return application_journal_transport_encoding(text.begin(), text.end());
+}
+
+application_journal_declaration_identity decode_active_reference(
+    const application_journal_transport_encoding& bytes)
+{
+  constexpr std::size_t encoded_size = 10U + 64U + 1U;
+  if (bytes.size() != encoded_size || bytes.back() != '\n')
+    throw journal_store_error(journal_store_error_code::index_corrupt, 0,
+                              "active request locator is malformed");
+  try {
+    return application_journal_declaration_identity::parse(
+        std::string(bytes.begin(), bytes.end() - 1));
+  } catch (const std::exception& error) {
+    throw journal_store_error(journal_store_error_code::index_corrupt, 0,
+                              std::string("active request locator is corrupt: ") +
+                                  error.what());
+  }
+}
+
+class cursor_lock final {
+public:
+  explicit cursor_lock(int journal_fd)
+  {
+    const int flags = O_RDWR | O_CREAT | cloexec_flag() | nofollow_flag() |
+                      O_NONBLOCK;
+    fd_.reset(open_at(journal_fd, "cursor.lock", flags, 0600));
+    if (fd_.get() < 0)
+      throw_system(journal_store_error_code::lock_failed,
+                   "cannot open journal cursor lock");
+    set_close_on_exec(fd_.get());
+    require_regular(fd_.get(), "journal cursor lock");
+
+    struct flock lock {};
+    lock.l_type = F_WRLCK;
+    lock.l_whence = SEEK_SET;
+    for (;;) {
+      if (::fcntl(fd_.get(), F_SETLKW, &lock) == 0)
+        break;
+      if (errno != EINTR)
+        throw_system(journal_store_error_code::lock_failed,
+                     "cannot acquire journal cursor lock");
+    }
+  }
+
+private:
+  unique_fd fd_;
+};
+
+application_journal_declaration decode_declaration(
+    const application_journal_transport_encoding& bytes,
+    const application_journal_declaration_identity& expected)
+{
+  try {
+    auto value = decode_application_journal_declaration(bytes);
+    if (value.identity() != expected)
+      throw journal_store_error(journal_store_error_code::value_corrupt, 0,
+                                "journal declaration filename and bytes disagree");
+    return value;
+  } catch (const journal_store_error&) {
     throw;
+  } catch (const application_journal_transport_codec_error& error) {
+    throw journal_store_error(journal_store_error_code::value_corrupt, 0,
+                              std::string("journal declaration is corrupt: ") +
+                                  error.what());
+  }
+}
+
+application_journal_step decode_step(
+    const application_journal_transport_encoding& bytes,
+    const application_journal_declaration_identity& declaration,
+    std::uint64_t sequence)
+{
+  try {
+    auto value = decode_application_journal_step(bytes);
+    if (value.declaration() != declaration || value.sequence() != sequence)
+      throw journal_store_error(journal_store_error_code::value_corrupt, 0,
+                                "journal step exact address and bytes disagree");
+    return value;
+  } catch (const journal_store_error&) {
+    throw;
+  } catch (const application_journal_transport_codec_error& error) {
+    throw journal_store_error(journal_store_error_code::value_corrupt, 0,
+                              std::string("journal step is corrupt: ") + error.what());
+  }
+}
+
+application_journal_cursor decode_cursor(
+    const application_journal_transport_encoding& bytes,
+    const application_journal_declaration_identity& declaration)
+{
+  try {
+    auto value = decode_application_journal_cursor(bytes);
+    if (value.declaration() != declaration)
+      throw journal_store_error(journal_store_error_code::value_corrupt, 0,
+                                "journal cursor namespace and bytes disagree");
+    return value;
+  } catch (const journal_store_error&) {
+    throw;
+  } catch (const application_journal_transport_codec_error& error) {
+    throw journal_store_error(journal_store_error_code::value_corrupt, 0,
+                              std::string("journal cursor is corrupt: ") + error.what());
   }
 }
 
 } // namespace
 
-journal_store_error::journal_store_error(
-    journal_store_error_code code,
-    int system_error,
-    std::string message,
-    bool replacement_visible)
+journal_store_error::journal_store_error(journal_store_error_code code,
+                                         int system_error,
+                                         std::string message,
+                                         bool publication_visible)
     : std::runtime_error(std::move(message)), code_(code),
-      system_error_(system_error), replacement_visible_(replacement_visible)
+      system_error_(system_error), publication_visible_(publication_visible)
 {
 }
 
@@ -406,75 +593,55 @@ int journal_store_error::system_error() const noexcept
   return system_error_;
 }
 
-bool journal_store_error::replacement_visible() const noexcept
+bool journal_store_error::publication_visible() const noexcept
 {
-  return replacement_visible_;
+  return publication_visible_;
 }
 
-application_journal_store application_journal_store::open(
+std::unique_ptr<application_journal_store> application_journal_store::open(
     const std::string& directory)
 {
   if (directory.empty())
-    throw journal_store_error(
-        journal_store_error_code::directory_open_failed, EINVAL,
-        "journal-store directory path is empty");
+    throw journal_store_error(journal_store_error_code::directory_open_failed,
+                              EINVAL, "journal-store directory path is empty");
   int flags = O_RDONLY | cloexec_flag() | nofollow_flag();
 #ifdef O_DIRECTORY
   flags |= O_DIRECTORY;
 #endif
   unique_fd fd(open_path(directory.c_str(), flags));
   if (fd.get() < 0)
-    throw_system(
-        journal_store_error_code::directory_open_failed,
-        "cannot open journal-store directory");
+    throw_system(journal_store_error_code::directory_open_failed,
+                 "cannot open journal-store directory");
   set_close_on_exec(fd.get());
-  require_directory(fd.get());
-  return application_journal_store(fd.release());
+  require_directory(fd.get(), "journal-store descriptor");
+  return std::unique_ptr<application_journal_store>(
+      new application_journal_store(fd.release()));
 }
 
-application_journal_store application_journal_store::from_directory_fd(
-    int directory_fd)
+std::unique_ptr<application_journal_store>
+application_journal_store::from_directory_fd(int directory_fd)
 {
   if (directory_fd < 0)
-    throw journal_store_error(
-        journal_store_error_code::directory_invalid, EBADF,
-        "journal-store directory descriptor is invalid");
+    throw journal_store_error(journal_store_error_code::directory_invalid,
+                              EBADF,
+                              "journal-store directory descriptor is invalid");
 #ifdef F_DUPFD_CLOEXEC
   unique_fd duplicate(::fcntl(directory_fd, F_DUPFD_CLOEXEC, 0));
 #else
   unique_fd duplicate(::dup(directory_fd));
 #endif
   if (duplicate.get() < 0)
-    throw_system(
-        journal_store_error_code::directory_open_failed,
-        "cannot duplicate journal-store directory descriptor");
+    throw_system(journal_store_error_code::directory_open_failed,
+                 "cannot duplicate journal-store directory descriptor");
   set_close_on_exec(duplicate.get());
-  require_directory(duplicate.get());
-  return application_journal_store(duplicate.release());
+  require_directory(duplicate.get(), "journal-store descriptor");
+  return std::unique_ptr<application_journal_store>(
+      new application_journal_store(duplicate.release()));
 }
 
 application_journal_store::application_journal_store(int directory_fd) noexcept
     : directory_fd_(directory_fd)
 {
-}
-
-application_journal_store::application_journal_store(
-    application_journal_store&& other) noexcept
-    : directory_fd_(other.directory_fd_)
-{
-  other.directory_fd_ = -1;
-}
-
-application_journal_store& application_journal_store::operator=(
-    application_journal_store&& other) noexcept
-{
-  if (this != &other) {
-    if (directory_fd_ >= 0)
-      static_cast<void>(::close(directory_fd_));
-    directory_fd_ = other.directory_fd_;
-    other.directory_fd_ = -1;
-  }
-  return *this;
 }
 
 application_journal_store::~application_journal_store()
@@ -483,67 +650,123 @@ application_journal_store::~application_journal_store()
     static_cast<void>(::close(directory_fd_));
 }
 
-application_journal_record application_journal_store::publish(
-    const application_journal_record& record)
+application_journal_declaration application_journal_store::publish_declaration(
+    const application_journal_declaration& declaration)
 {
-  const auto name = storage_name(record.header().identity());
-  application_journal_record retained = record;
-  bool publish_snapshot = true;
-  if (const auto current = read_encoding(directory_fd_, name)) {
-    const auto previous = decode_stored(*current, record.header().identity());
-    try {
-      validate_application_journal_successor(previous, record);
-    } catch (const application_journal_transition_error& error) {
-      throw journal_store_error(
-          journal_store_error_code::snapshot_conflict, 0,
-          std::string("journal snapshot replacement conflicts: ") +
-              error.what());
-    }
-    if (previous.identity() == record.identity()) {
-      retained = previous;
-      publish_snapshot = false;
-    }
-  }
+  auto journal = ensure_child_directory(directory_fd_, journal_name(declaration.identity()),
+                                        "journal declaration namespace");
+  static_cast<void>(ensure_child_directory(journal.get(), "steps",
+                                           "journal steps namespace"));
+  const auto bytes = encode_application_journal_declaration(declaration);
+  publish_immutable(journal.get(), "declaration.bin", bytes);
 
-  if (publish_snapshot) {
-    const auto encoding = encode_application_journal(record);
-    publish_encoding(directory_fd_, name, encoding);
-  }
-
-  const auto active = encode_active_reference(record.header().identity());
-  publish_encoding(
-      directory_fd_, active_name(record.header().request()), active);
-  return retained;
+  const auto locator = encode_active_reference(declaration.identity());
+  publish_replacement(directory_fd_, active_name(declaration.header().request()), locator);
+  return declaration;
 }
 
-std::optional<application_journal_record> application_journal_store::load(
-    const application_journal_identity& journal) const
+application_journal_step application_journal_store::publish_step(
+    const application_journal_step& step)
 {
-  const auto name = storage_name(journal);
-  const auto encoding = read_encoding(directory_fd_, name);
-  if (!encoding)
-    return std::nullopt;
-  return decode_stored(*encoding, journal);
+  auto journal = open_required_journal(directory_fd_, step.declaration());
+  require_declaration_file(journal.get());
+  auto steps = open_required_steps(journal.get());
+  const auto bytes = encode_application_journal_step(step);
+  publish_immutable(steps.get(), step_name(step.sequence()), bytes);
+  return step;
 }
 
-std::optional<application_journal_record>
-application_journal_store::load_active(
-    const application_request_identity& request) const
+application_journal_cursor application_journal_store::compare_and_publish_cursor(
+    const std::optional<application_journal_cursor_identity>& expected,
+    const application_journal_cursor& cursor)
 {
-  const auto reference = read_encoding(directory_fd_, active_name(request));
-  if (!reference)
+  auto journal = open_required_journal(directory_fd_, cursor.declaration());
+  require_declaration_file(journal.get());
+  cursor_lock lock(journal.get());
+  const auto current_bytes = read_encoding(journal.get(), "cursor.bin",
+                                           "journal cursor");
+  std::optional<application_journal_cursor> current;
+  if (current_bytes)
+    current = decode_cursor(*current_bytes, cursor.declaration());
+
+  if (current && current->identity() == cursor.identity())
+    return *current;
+  if (expected) {
+    if (!current || current->identity() != *expected)
+      throw journal_store_error(journal_store_error_code::cursor_conflict, 0,
+                                "journal cursor compare-and-publish expectation is stale");
+  } else if (current) {
+    throw journal_store_error(journal_store_error_code::cursor_conflict, 0,
+                              "initial journal cursor is already published");
+  }
+
+  const auto bytes = encode_application_journal_cursor(cursor);
+  publish_replacement(journal.get(), "cursor.bin", bytes);
+  return cursor;
+}
+
+std::optional<application_journal_declaration>
+application_journal_store::load_declaration(
+    const application_journal_declaration_identity& identity)
+{
+  auto journal = open_child_directory(directory_fd_, journal_name(identity),
+                                      "journal declaration namespace");
+  if (!journal)
     return std::nullopt;
-  const auto journal = decode_active_reference(*reference);
-  const auto record = load(journal);
-  if (!record)
-    throw journal_store_error(
-        journal_store_error_code::snapshot_corrupt, 0,
-        "active application-request index references a missing journal");
-  if (record->header().request() != request)
-    throw journal_store_error(
-        journal_store_error_code::snapshot_corrupt, 0,
-        "active application-request index references another request");
-  return record;
+  const auto bytes = read_encoding(journal->get(), "declaration.bin",
+                                   "journal declaration");
+  if (!bytes)
+    return std::nullopt;
+  return decode_declaration(*bytes, identity);
+}
+
+std::optional<application_journal_cursor> application_journal_store::load_cursor(
+    const application_journal_declaration_identity& declaration)
+{
+  auto journal = open_child_directory(directory_fd_, journal_name(declaration),
+                                      "journal declaration namespace");
+  if (!journal)
+    return std::nullopt;
+  const auto bytes = read_encoding(journal->get(), "cursor.bin", "journal cursor");
+  if (!bytes)
+    return std::nullopt;
+  return decode_cursor(*bytes, declaration);
+}
+
+std::optional<application_journal_step> application_journal_store::load_step(
+    const application_journal_declaration_identity& declaration,
+    std::uint64_t sequence)
+{
+  auto journal = open_child_directory(directory_fd_, journal_name(declaration),
+                                      "journal declaration namespace");
+  if (!journal)
+    return std::nullopt;
+  auto steps = open_child_directory(journal->get(), "steps", "journal steps namespace");
+  if (!steps)
+    return std::nullopt;
+  const auto bytes = read_encoding(steps->get(), step_name(sequence), "journal step");
+  if (!bytes)
+    return std::nullopt;
+  return decode_step(*bytes, declaration, sequence);
+}
+
+std::optional<application_journal_declaration_identity>
+application_journal_store::load_active_declaration(
+    const application_request_identity& request)
+{
+  const auto bytes = read_encoding(directory_fd_, active_name(request),
+                                   "active request locator");
+  if (!bytes)
+    return std::nullopt;
+  const auto identity = decode_active_reference(*bytes);
+  const auto declaration = load_declaration(identity);
+  if (!declaration)
+    throw journal_store_error(journal_store_error_code::index_corrupt, ENOENT,
+                              "active request locator references a missing declaration");
+  if (declaration->header().request() != request)
+    throw journal_store_error(journal_store_error_code::index_corrupt, 0,
+                              "active request locator references another request");
+  return identity;
 }
 
 } // namespace pkgapply::posix

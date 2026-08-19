@@ -18,6 +18,12 @@ done
 [ -s "$meson_file" ] || fail 'tests/meson.build is absent'
 [ -f "$root/tests/integration/durability_failure_test.cpp" ] ||
   fail 'durability failure regression is missing'
+[ -f "$root/tests/mechanism/posix_journal_store_test.cpp" ] ||
+  fail 'append-only POSIX journal-store assault is missing'
+[ ! -e "$root/tests/mechanism/posix_checkpoint_store_test.cpp" ] ||
+  fail 'retired checkpoint-store test remains'
+[ ! -e "$root/tests/fixtures/checkpoint_test_fixture.h" ] ||
+  fail 'retired checkpoint fixture remains'
 [ -f "$root/tests/header/public_header_compile.cpp" ] ||
   fail 'generic public-header harness is missing'
 

@@ -85,7 +85,6 @@ if get_option('tests').allowed()
     ['active-removal', 'mechanism/posix_active_removal_test.cpp', [libpkgapply_posix_internal_test_dep]],
     ['active-workspace', 'mechanism/posix_active_workspace_test.cpp', [libpkgapply_posix_internal_test_dep]],
     ['capture-store', 'mechanism/posix_capture_store_test.cpp', crypto_test_deps],
-    ['checkpoint-store', 'mechanism/posix_checkpoint_store_test.cpp', fixture_test_deps],
     ['completed-evidence-store', 'mechanism/posix_completed_evidence_store_test.cpp', fixture_test_deps],
     ['journal-store', 'mechanism/posix_journal_store_test.cpp', [libpkgapply_posix_dep]],
     ['mutation-lease', 'mechanism/posix_mutation_lease_test.cpp', [libpkgapply_posix_dep]],
@@ -121,7 +120,6 @@ if get_option('tests').allowed()
   public_headers = [
     'backend.h',
     'capture_store.h',
-    'checkpoint_store.h',
     'completed_evidence_store.h',
     'export.h',
     'journal_store.h',

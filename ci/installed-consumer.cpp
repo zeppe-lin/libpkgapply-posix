@@ -51,8 +51,8 @@ private:
 
 int main()
 {
-  if (pkgapply::posix::version() != "3.2.3" ||
-      pkgapply::posix::api_version != 2)
+  if (pkgapply::posix::version() != "4.0.0" ||
+      pkgapply::posix::api_version != 3)
   {
     return 1;
   }
@@ -72,5 +72,8 @@ int main()
   auto rejected =
       pkgapply::posix::application_rejected_object_store::open(directory.path());
   static_cast<void>(rejected);
+  auto journal =
+      pkgapply::posix::application_journal_store::open(directory.path());
+  static_cast<void>(journal);
   return 0;
 }

@@ -16,13 +16,13 @@ library=$1
 output=$(readelf -d "$library")
 printf '%s\n' "$output"
 printf '%s\n' "$output" | grep -F \
-  'Library soname: [libpkgapply-posix.so.2]' >/dev/null || {
+  'Library soname: [libpkgapply-posix.so.3]' >/dev/null || {
   echo 'shared-boundary-audit: wrong SONAME' >&2
   exit 1
 }
 needed=$(printf '%s\n' "$output" | grep 'Shared library:' || true)
 for dependency in \
-  'libpkgapply.so.3' \
+  'libpkgapply.so.4' \
   'libpkgimage.so.1' \
   'libpkgplan.so.1'
 do
@@ -45,7 +45,7 @@ if grep -F 'pkgapply::posix::detail::' "$library.exports" >/dev/null; then
   exit 1
 fi
 if grep -E ' [TWV] ' "$library.exports" | grep -vE \
-  'pkgapply::posix::|typeinfo (for|name for) pkgapply::posix::|vtable for pkgapply::posix::|LIBPKGAPPLY_POSIX_2| _init$| _fini$' \
+  'pkgapply::posix::|typeinfo (for|name for) pkgapply::posix::|vtable for pkgapply::posix::|LIBPKGAPPLY_POSIX_3| _init$| _fini$' \
   >/dev/null
 then
   echo 'shared-boundary-audit: foreign C++ export is present' >&2

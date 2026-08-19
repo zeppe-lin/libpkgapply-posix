@@ -26,8 +26,7 @@ enum class posix_backend_error_code : std::uint8_t {
   request_kind_mismatch = 5, /*!< Request kind contradicts begin operation. */
   incoming_image_mismatch = 6, /*!< Incoming image is not request authority. */
   attempt_nonce_failed = 7, /*!< Physical attempt nonce creation failed. */
-  restart_checkpoint_missing = 8, /*!< Durable restart checkpoint is absent. */
-  restart_authority_mismatch = 9, /*!< Restart material names other authority. */
+  restart_authority_mismatch = 8, /*!< Restart material names other authority. */
 };
 
 /*! \brief Configuration, binding, or restart failure in backend composition. */
@@ -73,14 +72,12 @@ public:
   /*!
    * \brief Construct from already-selected directory authorities.
    *
-   * Descriptors respectively identify the target root, journal store,
-   * restart-checkpoint store, incoming-payload store, old-object capture
-   * store, rejected-object store, and completed-evidence store.
+   * Descriptors respectively identify the target root, incoming-payload store,
+   * old-object capture store, rejected-object store, and completed-evidence
+   * store. Application-journal persistence is a separate owner-wired object.
    *
    * \param target Exact semantic target context retained by the backend.
    * \param target_root_fd Already-open managed target root.
-   * \param journal_store_fd Already-open durable journal namespace.
-   * \param checkpoint_store_fd Already-open restart-checkpoint namespace.
    * \param payload_store_fd Already-open private incoming-payload namespace.
    * \param capture_store_fd Already-open private old-object namespace.
    * \param rejected_store_fd Already-open rejected-object namespace.
@@ -91,8 +88,6 @@ public:
   [[nodiscard]] static std::unique_ptr<application_posix_backend>
   from_directory_fds(application_target_context target,
                      int target_root_fd,
-                     int journal_store_fd,
-                     int checkpoint_store_fd,
                      int payload_store_fd,
                      int capture_store_fd,
                      int rejected_store_fd,
@@ -155,7 +150,7 @@ public:
   /*! \brief Reopen one durable installation or upgrade transaction.
    *  \param request Exact immutable application authority.
    *  \param lease Mutable borrowed replacement mutation lease.
-   *  \param journal Exact durable journal snapshot.
+   *  \param restart Owner-derived in-memory replay view to revalidate.
    *  \param incoming_image Exact admitted normalized image.
    *  \return Unique reopened descriptor-anchored transaction.
    *  \throws posix_backend_error If restart authority is absent or mismatched.
@@ -164,13 +159,13 @@ public:
   resume_with_incoming_image(
       const package_application_request& request,
       target_mutation_lease& lease,
-      const application_journal_record& journal,
+      const application_restart_view& restart,
       const pkgimage::package_image& incoming_image) override;
 
   /*! \brief Reopen one durable removal transaction.
    *  \param request Exact immutable removal authority.
    *  \param lease Mutable borrowed replacement mutation lease.
-   *  \param journal Exact durable journal snapshot.
+   *  \param restart Owner-derived in-memory replay view to revalidate.
    *  \return Unique reopened descriptor-anchored transaction.
    *  \throws posix_backend_error If restart authority is absent or mismatched.
    */
@@ -178,7 +173,7 @@ public:
   resume_without_incoming_image(
       const package_application_request& request,
       target_mutation_lease& lease,
-      const application_journal_record& journal) override;
+      const application_restart_view& restart) override;
 
 private:
   class implementation;
